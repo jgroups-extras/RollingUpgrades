@@ -1,1 +1,7 @@
-= Rolling upgrades of an Infinispan cluster
+= Rolling upgrades of a JGroups cluster
+
+This document describes how to upgrade a JGroups cluster to a new, backward-incompatible version,
+or a new configuration. The term _incompatible_ means that the nodes running on the new version
+(or configuration) would be unable to form a cluster with the existing nodes.
+
+
