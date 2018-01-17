@@ -23,3 +23,59 @@ Say we have a cluster `{A1,A2,A3}`. A rolling upgrade might proceed as follows:
 * `{A3} {B1,B2}`
 * `{A3} {B1,B2,B3}`
 * `{B1,B2,B3}`
+
+=== Goals
+
+There are 2 goals for the above scenario:
+
+. There needs to be a _global view_ of all nodes; ie. instead of the 2 separate
+cluster views `{A1,A2,A3}` and `{B1}`, the global view should be `{A1,A2,A3,B1}`
+. Members of the different clusters must be able to talk to each other; a.k.a. send
+(unicast and multicast) messages to each other. In the above example, `A2` should be able to send
+a message to `B1`.
+
+
+=== Design overview
+
+In order to achieve the above goals, all application messages are sent to a JGroups-independent
+server (the _RelayServer_), which relays them to all registered cluster nodes, as shown below:
+
+----
+                    ---------------
+                    | RelayServer |
+                    ---------------
+                           ^
+                           |
+                           |
+        ---------------------------------
+        |      |        |         |      |
+        |      |        |         |      |
+        v      v        v         v      v
+      ----    ----    ----      ----   ----
+      |A1|    |A2|    |A3|      |B1|   |B2|
+      ----    ----    ----      ----   ----
+----
+
+The RelayServer
+
+
+----
+
+            Application
+                 ^
+                 | (send, receive)
+                 |
+                 |
+                 v
+            -----------                        ---------------
+            |  RELAY3 | <------------------->  | RelayServer |
+            -----------                        ---------------
+            |  FRAG3  |
+            -----------
+            | NAKACK2 |
+            -----------
+            |    ...  |
+            -----------
+
+
+----
