@@ -1,7 +1,25 @@
 = Rolling upgrades of a JGroups cluster
 
-This document describes how to upgrade a JGroups cluster to a new, backward-incompatible version,
+This document describes how to upgrade a JGroups cluster to a new, backwards-incompatible version,
 or a new configuration. The term _incompatible_ means that the nodes running on the new version
 (or configuration) would be unable to form a cluster with the existing nodes.
 
+Upgrading a cluster to a new version is critical for some customers, who cannot afford downtime.
 
+The design is influenced by how Kubernetes applies a new configuration: it adds a new pod,
+running with the new configuration, then kills off an existing one, until all existing pods
+have been replaced.
+
+== Overview
+
+Say we have a cluster `{A1,A2,A3}`. A rolling upgrade might proceed as follows:
+
+* `{A1,A2,A3}`
+* New node `B1` is started in a separate cluster: `{A1,A2,A3} {B1}`
+* An existing node is killed: `{A1,A3} {B1}`
+** Note that we don't know (in Kubernetes) which node is killed
+* And so on:
+* `{A1,A3} {B1,B2}`
+* `{A3} {B1,B2}`
+* `{A3} {B1,B2,B3}`
+* `{B1,B2,B3}`
