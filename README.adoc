@@ -29,13 +29,13 @@ Say we have a cluster `{A1,A2,A3}`. A rolling upgrade might proceed as follows:
 There are 2 goals for the above scenario:
 
 . There needs to be a _global view_ of all nodes; ie. instead of the 2 separate
-cluster views `{A1,A2,A3}` and `{B1}`, the global view should be `{A1,A2,A3,B1}`
+cluster views `{A1,A2,A3}` and `{B1}`, the global view should be the virtual view `{A1,A2,A3,B1}`.
 . Members of the different clusters must be able to talk to each other; a.k.a. send
 (unicast and multicast) messages to each other. In the above example, `A2` should be able to send
 a message to `B1`.
 
 
-=== Design overview
+=== Design
 
 In order to achieve the above goals, all application messages are sent to a JGroups-independent
 server (the _RelayServer_), which relays them to all registered cluster nodes, as shown below:
@@ -56,26 +56,55 @@ server (the _RelayServer_), which relays them to all registered cluster nodes, a
       ----    ----    ----      ----   ----
 ----
 
-The RelayServer
+Each node knows the address of the RelayServer and registers with it by establishing a TCP connection.
+The RelayServer maintains a table of clusters mapped to nodes belonging to them.
 
+When a message is received from one of the nodes, the RelayServer forwards the message to registered
+nodes (multicast message), or to an individual node (unicast message).
+
+The server also installs _virtual views_ in all registered nodes when a new node joins. This gives
+the application the illusion of a global cluster with both existing and new members in the same
+view. This is needed for example by Infinispan to compute the consistent hash wheel correctly, and
+perform correct data rebalancing when (e.g.) `B1` is started.
+
+NOTE: It is paramount that the communication protocol between a node and the RelayServer is well defined
+and never changes, so that different versions of JGroups can talk to the same RelayServer.
+
+The communication on the client (cluster node) side is performed by `RELAY3`:
 
 ----
-
             Application
                  ^
+                 |
                  | (send, receive)
                  |
-                 |
                  v
-            -----------                        ---------------
-            |  RELAY3 | <------------------->  | RelayServer |
-            -----------                        ---------------
+            -----------         (forward,receive)          ---------------
+            |  RELAY3 | <------------------------------->  | RelayServer |
+            -----------   (JGroups-independent protocol)   ---------------
             |  FRAG3  |
             -----------
             | NAKACK2 |
             -----------
             |    ...  |
             -----------
-
-
 ----
+
+`RELAY3` is added at the top of the stack. When active, it forwards all application messages to the
+RelayServer, instead of sending them down the stack.
+
+When it receives a message from the RelayServer, it passes it up the stack to the application.
+
+When a cluster member joins, `RELAY3` will get the view of the local cluster (e.g. `{A1,A2,A3}`)
+from below. It stores the local view, but does not pass it up to the application. Instead, it asks
+the RelayServer to add it to the current global view. The RelayServer then creates a new global
+virtual view and sends it to all registered cluster members. Their `RELAY3` protocols send that
+global view up the stack to the application.
+
+This means, that applications with a stack that has `RELAY3` at the top will never receive cluster-local
+views, but only global views created by the RelayServer.
+
+The communication protocol between `RELAY3` and RelayServer needs to be well defined and should never
+change, so that different JGroups versions can talks to the server as long as their `RELAY3` protocol
+implements the protocol.
+
