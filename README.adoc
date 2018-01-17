@@ -136,13 +136,15 @@ views are installed.
 * Once this is done, `RELAY3` in all cluster members is configured to be active. This can be done
 via the RelayServer sending an `ACTIVATE` command to the cluster members. From now one, virtual
 global views and message relaying is enabled.
-* `kubectl apply ...` is executed *to apply a new configuration*. The new configuration points to an image
+* `kubectl apply` is executed *to apply a new configuration*. The new configuration points to an image
 with JGroups 4.x (the existing cluster members are running on 3.6), and possibly a new JGroups config.
 * Kubernetes starts a new pod with the new config and then kills off an existing node (as described
 in the overview section).
 ** The new config includes an _active_ `RELAY3` protocol at the top of the stack
 * When members are added/killed, a new global view will be installed via RelayServer
-* When all members have been updated to the new version, RelayServer sends an `DEACTIVATE`command
+* When all members have been updated to the new version, RelayServer sends an `DEACTIVATE` command
 to all cluster members, which de-activate `RELAY3` (or even remove it from the stack).
+* The RelayServer pod can now safely be killed.
+
 
 
