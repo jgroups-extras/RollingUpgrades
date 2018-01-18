@@ -1,0 +1,13 @@
+syntax="proto3";
+option java_package="org.jgroups.relay_server";
+option java_outer_classname="ChatOuter";
+
+
+service Chat {
+    rpc Post(stream Message) returns (stream Message);
+}
+
+message Message {
+    string msg=1;
+    string sender=2;
+}
