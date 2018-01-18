@@ -4,10 +4,10 @@ option java_outer_classname="ChatOuter";
 
 
 service Chat {
-    rpc Post(stream Message) returns (stream Message);
+    rpc Post(stream ChatMessage) returns (stream ChatMessage);
 }
 
-message Message {
+message ChatMessage {
     string msg=1;
     string sender=2;
 }

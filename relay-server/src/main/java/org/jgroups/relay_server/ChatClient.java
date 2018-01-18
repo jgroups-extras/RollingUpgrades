@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit;
  * @author Bela Ban
  * @since x.y
  */
-public class RelayClient {
+public class ChatClient {
     private ManagedChannel channel;
     private org.jgroups.relay_server.ChatGrpc.ChatStub asyncStub;
 
@@ -20,8 +20,8 @@ public class RelayClient {
         channel=ManagedChannelBuilder.forAddress("localhost", port).usePlaintext(true).build();
         asyncStub=org.jgroups.relay_server.ChatGrpc.newStub(channel);
 
-        StreamObserver<org.jgroups.relay_server.ChatOuter.Message> reqs=asyncStub.post(new StreamObserver<org.jgroups.relay_server.ChatOuter.Message>() {
-            public void onNext(org.jgroups.relay_server.ChatOuter.Message value) {
+        StreamObserver<org.jgroups.relay_server.ChatOuter.ChatMessage> reqs=asyncStub.post(new StreamObserver<org.jgroups.relay_server.ChatOuter.ChatMessage>() {
+            public void onNext(org.jgroups.relay_server.ChatOuter.ChatMessage value) {
                 System.out.printf("%s: %s\n", value.getSender(), value.getMsg());
             }
 
@@ -42,7 +42,7 @@ public class RelayClient {
                 if(line.startsWith("quit") || line.startsWith("exit")) {
                     break;
                 }
-                org.jgroups.relay_server.ChatOuter.Message msg=org.jgroups.relay_server.ChatOuter.Message.newBuilder()
+                org.jgroups.relay_server.ChatOuter.ChatMessage msg=org.jgroups.relay_server.ChatOuter.ChatMessage.newBuilder()
                   .setMsg(line).setSender(address).build();
                 reqs.onNext(msg);
             }
@@ -58,7 +58,7 @@ public class RelayClient {
     }
 
     public static void main(String[] args) throws InterruptedException {
-        RelayClient client=new RelayClient();
+        ChatClient client=new ChatClient();
         client.start(50051, args[0]);
         client.stop();
     }

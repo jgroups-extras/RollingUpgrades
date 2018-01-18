@@ -9,7 +9,7 @@ import java.io.IOException;
  * @author Bela Ban
  * @since  1.0.0
  */
-public class RelayServer {
+public class ChatServer {
     protected Server server;
 
     public void start(int port) throws IOException {
@@ -30,7 +30,7 @@ public class RelayServer {
     }
 
     public static void main(String[] args) throws IOException, InterruptedException {
-        RelayServer srv=new RelayServer();
+        ChatServer srv=new ChatServer();
         srv.start(50051);
         srv.stop();
     }

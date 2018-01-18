@@ -10,14 +10,14 @@ import java.util.List;
  * @since x.y
  */
 public class ChatService extends org.jgroups.relay_server.ChatGrpc.ChatImplBase {
-    protected List<StreamObserver<org.jgroups.relay_server.ChatOuter.Message>> observers=new ArrayList<>();
+    protected List<StreamObserver<org.jgroups.relay_server.ChatOuter.ChatMessage>> observers=new ArrayList<>();
 
     @Override
-    public StreamObserver<org.jgroups.relay_server.ChatOuter.Message> post(StreamObserver<org.jgroups.relay_server.ChatOuter.Message> responseObserver) {
+    public StreamObserver<org.jgroups.relay_server.ChatOuter.ChatMessage> post(StreamObserver<org.jgroups.relay_server.ChatOuter.ChatMessage> responseObserver) {
         observers.add(responseObserver);
 
-        return new StreamObserver<org.jgroups.relay_server.ChatOuter.Message>() {
-            public void onNext(org.jgroups.relay_server.ChatOuter.Message value) {
+        return new StreamObserver<org.jgroups.relay_server.ChatOuter.ChatMessage>() {
+            public void onNext(org.jgroups.relay_server.ChatOuter.ChatMessage value) {
                 postToAll(value);
             }
 
@@ -26,15 +26,15 @@ public class ChatService extends org.jgroups.relay_server.ChatGrpc.ChatImplBase 
             }
 
             public void onCompleted() {
-                for(StreamObserver<org.jgroups.relay_server.ChatOuter.Message> obs: observers)
+                for(StreamObserver<org.jgroups.relay_server.ChatOuter.ChatMessage> obs: observers)
                     obs.onCompleted();
                 observers.remove(this);
             }
         };
     }
 
-    protected void postToAll(org.jgroups.relay_server.ChatOuter.Message msg) {
-        for(StreamObserver<org.jgroups.relay_server.ChatOuter.Message> obs: observers)
+    protected void postToAll(org.jgroups.relay_server.ChatOuter.ChatMessage msg) {
+        for(StreamObserver<org.jgroups.relay_server.ChatOuter.ChatMessage> obs: observers)
             obs.onNext(msg);
     }
 

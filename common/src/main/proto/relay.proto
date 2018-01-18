@@ -1,0 +1,13 @@
+syntax="proto3";
+
+option java_package="org.jgroups.relay_server";
+// option java_outer_classname="RelayService";
+
+
+service RelayService {
+    rpc Relay (stream Message) returns (stream Message);
+}
+
+message Message {
+    bytes payload=1;
+}
