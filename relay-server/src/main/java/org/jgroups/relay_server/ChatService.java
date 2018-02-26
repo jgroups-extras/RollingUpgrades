@@ -34,8 +34,17 @@ public class ChatService extends org.jgroups.relay_server.ChatGrpc.ChatImplBase 
     }
 
     protected void postToAll(org.jgroups.relay_server.ChatOuter.ChatMessage msg) {
-        for(StreamObserver<org.jgroups.relay_server.ChatOuter.ChatMessage> obs: observers)
-            obs.onNext(msg);
+        System.out.printf("posting message %s to %d observers\n", msg.getMsg(), observers.size());
+        for(StreamObserver<org.jgroups.relay_server.ChatOuter.ChatMessage> obs: observers) {
+            try {
+                obs.onNext(msg);
+            }
+            catch(Throwable t) {
+                System.out.printf("exception %s: removing observer\n", t);
+                obs.onError(t);
+                observers.remove(obs);
+            }
+        }
     }
 
 }
