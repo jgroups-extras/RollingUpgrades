@@ -52,7 +52,7 @@
 
 
     <properties>
-        <version.jgroups>4.0.8.Final</version.jgroups>
+        <version.jgroups>4.0.10.Final</version.jgroups>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
 
