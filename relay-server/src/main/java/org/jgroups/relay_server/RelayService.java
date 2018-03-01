@@ -77,6 +77,7 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
     }
 
     protected static void postView(View v, ConcurrentMap<Address,StreamObserver<View>> map) {
+        boolean post_new_view=false;
         for(Map.Entry<Address,StreamObserver<View>> entry: map.entrySet()) {
             Address              key=entry.getKey();
             StreamObserver<View> val=entry.getValue();
@@ -85,8 +86,19 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
             }
             catch(Throwable t) {
                 map.remove(key);
+                post_new_view=true;
             }
         }
+        if(post_new_view)
+            postNewView(map);
+    }
+
+    protected static void postNewView(final ConcurrentMap<Address,StreamObserver<View>> map) {
+        View.Builder view_builder=View.newBuilder();
+        for(Address mbr: map.keySet())
+            view_builder.addMember(mbr);
+        View new_view=view_builder.build();
+        postView(new_view, map);
     }
 
 }
