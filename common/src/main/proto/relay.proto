@@ -1,13 +1,31 @@
 syntax="proto3";
 
-option java_package="org.jgroups.relay_server";
-// option java_outer_classname="RelayService";
+package org.jgroups.relay_server;
 
+
+option java_multiple_files = true;
 
 service RelayService {
-    rpc Relay (stream Message) returns (stream Message);
+    rpc Relay(stream Message) returns (stream Message);
+    rpc Register(Registration) returns (stream View);
 }
 
 message Message {
-    bytes payload=1;
+    string  cluster_name = 1;
+    Address destination  = 2; // null: send to all
+    Address sender       = 3;
+    bytes   payload      = 4;
+}
+
+message Registration {
+    Address local_addr  = 1;
+    View    view        = 2;
+}
+
+message Address {
+    string address=1;
+}
+
+message View {
+    repeated Address member=1;
 }
