@@ -16,18 +16,33 @@ import java.util.concurrent.TimeUnit;
 public class RelayClient {
     protected ManagedChannel                    channel;
     protected RelayServiceGrpc.RelayServiceStub asyncStub;
-    protected final String                      local_addr;
+    protected final Address                     local_addr;
     protected static final String               CLUSTER="grpc";
 
 
     public RelayClient(String addr) {
-        local_addr=addr;
+        local_addr=Address.newBuilder().setAddress(addr).build();
     }
 
 
     protected void start(int port) throws InterruptedException {
         channel=ManagedChannelBuilder.forAddress("localhost", port).usePlaintext(true).build();
         asyncStub=org.jgroups.relay_server.RelayServiceGrpc.newStub(channel);
+
+        Registration reg=Registration.newBuilder().setLocalAddr(local_addr).setClusterName(CLUSTER).build();
+        asyncStub.register(reg, new StreamObserver<View>() {
+            public void onNext(View v) {
+                System.out.printf("-- received view %s\n", v.getMemberList());
+            }
+
+            public void onError(Throwable t) {
+
+            }
+
+            public void onCompleted() {
+
+            }
+        });
 
         StreamObserver<Message> send_stream=asyncStub.relay(new StreamObserver<Message>() {
             public void onNext(Message msg) {
@@ -53,8 +68,7 @@ public class RelayClient {
 
                 Message msg=Message.newBuilder()
                   .setClusterName(CLUSTER)
-                  .setDestination(Address.newBuilder())
-                  .setSender(Address.newBuilder().setAddress(local_addr))
+                  .setSender(local_addr)
                   .setPayload(ByteString.copyFrom(line.getBytes()))
                   .build();
                 send_stream.onNext(msg);
