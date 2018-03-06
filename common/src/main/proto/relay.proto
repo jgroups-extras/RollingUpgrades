@@ -7,8 +7,9 @@ option java_multiple_files = true;
 
 
 service RelayService {
-    rpc Relay(stream Message) returns (stream Message);
-    rpc Register(Registration) returns (stream View);
+    rpc Relay (stream Message)     returns (stream Message);
+    rpc Join  (stream JoinRequest) returns (stream View);
+    rpc Leave (LeaveRequest)       returns (Void);
 }
 
 message Message {
@@ -18,10 +19,16 @@ message Message {
     bytes   payload      = 4;
 }
 
-message Registration {
-    string cluster_name = 1;
-    Address local_addr  = 2;
-    View    view        = 3;
+message JoinRequest {
+    string  cluster_name = 1;
+    Address local_addr   = 2;
+    View    view         = 3;
+}
+
+/** Used for graceful leaves. Ungraceful leaves (e.g. crashes) are detected by the RelayService directly  */
+message LeaveRequest {
+    string      cluster_name = 1;
+    Address     leaver = 2;
 }
 
 message Address {
@@ -30,4 +37,13 @@ message Address {
 
 message View {
     repeated Address member=1;
+}
+
+/** Same as View, but used when we want a list of addresses, not a view (the diff is merely conceptual) */
+//message AddressList {
+  //  repeated Address member = 1;
+//}
+
+message Void {
+    // contains nothing
 }

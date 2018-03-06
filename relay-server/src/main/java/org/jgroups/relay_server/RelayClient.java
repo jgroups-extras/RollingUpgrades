@@ -16,7 +16,10 @@ import java.util.concurrent.TimeUnit;
 public class RelayClient {
     protected ManagedChannel                    channel;
     protected RelayServiceGrpc.RelayServiceStub asyncStub;
+    protected RelayServiceGrpc.RelayServiceBlockingStub blocking_stub;
     protected final Address                     local_addr;
+    protected View                              view; // the current view
+    protected StreamObserver<JoinRequest>       join_req;
     protected static final String               CLUSTER="grpc";
 
 
@@ -27,12 +30,13 @@ public class RelayClient {
 
     protected void start(int port) throws InterruptedException {
         channel=ManagedChannelBuilder.forAddress("localhost", port).usePlaintext(true).build();
-        asyncStub=org.jgroups.relay_server.RelayServiceGrpc.newStub(channel);
+        asyncStub=RelayServiceGrpc.newStub(channel);
+        blocking_stub=RelayServiceGrpc.newBlockingStub(channel);
 
-        Registration reg=Registration.newBuilder().setLocalAddr(local_addr).setClusterName(CLUSTER).build();
-        asyncStub.register(reg, new StreamObserver<View>() {
+        join_req=asyncStub.join(new StreamObserver<View>() {
             public void onNext(View v) {
-                System.out.printf("-- received view %s\n", v.getMemberList());
+                System.out.printf("-- received view %s\n", Utils.print(v));
+                RelayClient.this.view=v;
             }
 
             public void onError(Throwable t) {
@@ -43,6 +47,9 @@ public class RelayClient {
 
             }
         });
+        JoinRequest req=JoinRequest.newBuilder().setLocalAddr(local_addr).setClusterName(CLUSTER).build();
+        join_req.onNext(req);
+
 
         StreamObserver<Message> send_stream=asyncStub.relay(new StreamObserver<Message>() {
             public void onNext(Message msg) {
@@ -63,8 +70,11 @@ public class RelayClient {
             try {
                 System.out.print("> "); System.out.flush();
                 String line=in.readLine().toLowerCase();
-                if(line.startsWith("quit") || line.startsWith("exit"))
+                if(line.startsWith("quit") || line.startsWith("exit")) {
+                    blocking_stub.leave(LeaveRequest.newBuilder().setClusterName(CLUSTER).setLeaver(local_addr).build());
+                    System.out.println("Client left gracefully");
                     break;
+                }
 
                 Message msg=Message.newBuilder()
                   .setClusterName(CLUSTER)

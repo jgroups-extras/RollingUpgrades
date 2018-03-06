@@ -2,8 +2,7 @@ package org.jgroups.relay_server;
 
 import io.grpc.stub.StreamObserver;
 
-import java.util.Collection;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
@@ -13,10 +12,11 @@ import java.util.concurrent.ConcurrentMap;
  * @since  1.0.0
  */
 public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
-    protected final Collection<StreamObserver<Message>>                               observers=new ConcurrentLinkedQueue<>();
-    protected final ConcurrentMap<String,ConcurrentMap<Address,StreamObserver<View>>> views=new ConcurrentHashMap<>();
+    protected final Collection<StreamObserver<Message>>                     observers=new ConcurrentLinkedQueue<>();
+    protected final ConcurrentMap<String,Map<Address,StreamObserver<View>>> views=new ConcurrentHashMap<>();
 
 
+    @Override
     public StreamObserver<Message> relay(StreamObserver<Message> responseObserver) {
         observers.add(responseObserver);
         System.out.printf("-- relay(): %d observers\n", observers.size());
@@ -32,34 +32,91 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
             }
 
             public void onCompleted() {
-                System.out.println("server is done. Removing observer");
+                System.out.printf("Removing observer %s\n", responseObserver);
                 observers.remove(responseObserver);
             }
         };
     }
 
-    public void register(Registration request, StreamObserver<View> responseObserver) {
-        String  cluster=request.getClusterName();
-        Address addr=request.getLocalAddr();
-        View    view=request.getView();
-        boolean added=false;
 
-        ConcurrentMap<Address,StreamObserver<View>> map=views.computeIfAbsent(cluster, k -> new ConcurrentHashMap<>());
+    @Override
+    public StreamObserver<JoinRequest> join(StreamObserver<View> responseObserver) {
+        return new StreamObserver<JoinRequest>() {
+            public void onNext(JoinRequest req) {
+                final String  cluster=req.getClusterName();
+                final Address addr=req.getLocalAddr();
+                final View    view=req.getView();
+                boolean       added=false;
 
-        if(map.putIfAbsent(addr, responseObserver) == null)
-            added=true;
-        if(view != null) {
-            for(Address mbr: view.getMemberList()) {
-                if(map.putIfAbsent(mbr, responseObserver) == null)
-                    added=true;
+
+                Map<Address,StreamObserver<View>> map;
+                synchronized(views) {
+                    map=views.computeIfAbsent(cluster, k -> new LinkedHashMap());
+                    if(map.putIfAbsent(addr, responseObserver) == null)
+                        added=true;
+                    if(view != null) {
+                        for(Address mbr : view.getMemberList()) {
+                            if(map.putIfAbsent(mbr, responseObserver) == null)
+                                added=true;
+                        }
+                    }
+                }
+                if(added)
+                    postView(map);
+            }
+
+            public void onError(Throwable t) {
+                remove(responseObserver);
+            }
+
+            public void onCompleted() {
+                remove(responseObserver);
+            }
+        };
+    }
+
+    @Override
+    public void leave(LeaveRequest req, StreamObserver<Void> responseObserver) {
+        final String  cluster=req.getClusterName();
+        boolean       removed=false;
+        Address       leaver=req.getLeaver();
+
+        if(leaver == null)
+            return;
+
+        Map<Address,StreamObserver<View>> map;
+        synchronized(views) {
+            map=views.get(cluster);
+            if(map != null) {
+                StreamObserver<View> observer=map.remove(leaver);
+                if(observer != null) {
+                    removed=true;
+                    observer.onCompleted();
+                }
+                if(removed)
+                    postView(map);
             }
         }
-        if(added) {
-            View.Builder view_builder=View.newBuilder();
-            for(Address mbr: map.keySet())
-                view_builder.addMember(mbr);
-            View new_view=view_builder.build();
-            postView(new_view, map);
+        responseObserver.onCompleted();
+    }
+
+    protected void remove(StreamObserver<View> observer) {
+        if(observer == null)
+            return;
+
+        boolean removed=false;
+        synchronized(views) {
+            for(Map.Entry<String,Map<Address,StreamObserver<View>>> entry : views.entrySet()) {
+                String cluster=entry.getKey();
+                Map<Address,StreamObserver<View>> map=entry.getValue();
+                map.values().removeIf(val -> Objects.equals(val, observer));
+                if(map.isEmpty())
+                    views.remove(cluster);
+                else {
+                    // post new view
+                    postView(map);
+                }
+            }
         }
     }
 
@@ -76,29 +133,36 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
         }
     }
 
-    protected static void postView(View v, ConcurrentMap<Address,StreamObserver<View>> map) {
-        boolean post_new_view=false;
-        for(Map.Entry<Address,StreamObserver<View>> entry: map.entrySet()) {
-            Address              key=entry.getKey();
-            StreamObserver<View> val=entry.getValue();
-            try {
-                val.onNext(v);
-            }
-            catch(Throwable t) {
-                map.remove(key);
-                post_new_view=true;
-            }
-        }
-        if(post_new_view)
-            postNewView(map);
-    }
-
-    protected static void postNewView(final ConcurrentMap<Address,StreamObserver<View>> map) {
+    protected static void postView(Map<Address,StreamObserver<View>> map) {
         View.Builder view_builder=View.newBuilder();
         for(Address mbr: map.keySet())
             view_builder.addMember(mbr);
         View new_view=view_builder.build();
-        postView(new_view, map);
+
+        for(Map.Entry<Address,StreamObserver<View>> entry: map.entrySet()) {
+            Address              key=entry.getKey();
+            StreamObserver<View> val=entry.getValue();
+            try {
+                val.onNext(new_view);
+            }
+            catch(Throwable t) {
+                map.remove(key);
+            }
+        }
     }
 
+
+
+   /* protected static AddressList diff(View first, View second) {
+        if(first == null || second == null)
+            return null;
+        List<Address> first_list=first.getMemberList(), second_list=second.getMemberList();
+        first_list.removeAll(second_list);
+        if(first_list.isEmpty())
+            return null;
+        AddressList.Builder builder=AddressList.newBuilder();
+        for(Address address: first_list)
+            builder.addMember(address);
+        return builder.build();
+    }*/
 }

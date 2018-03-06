@@ -16,10 +16,8 @@ public class RelayServer {
           .build()
           .start();
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            // Use stderr here since the logger may have been reset by its JVM shutdown hook.
-            System.err.println("*** shutting down gRPC server since JVM is shutting down");
             server.shutdown();
-            System.err.println("*** server shut down");
+            System.out.println("server was shut down");
         }));
         System.out.printf("-- RelayServer listening on %d\n", server.getPort());
         server.awaitTermination();
