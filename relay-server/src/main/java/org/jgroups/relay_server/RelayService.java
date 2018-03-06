@@ -97,6 +97,7 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
                     postView(map);
             }
         }
+        responseObserver.onNext(Void.newBuilder().build());
         responseObserver.onCompleted();
     }
 
@@ -104,7 +105,6 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
         if(observer == null)
             return;
 
-        boolean removed=false;
         synchronized(views) {
             for(Map.Entry<String,Map<Address,StreamObserver<View>>> entry : views.entrySet()) {
                 String cluster=entry.getKey();
