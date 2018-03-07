@@ -6,14 +6,16 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * @author Bela Ban
  * @since  1.0.0
  */
 public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
-    protected final Collection<StreamObserver<Message>>                     observers=new ConcurrentLinkedQueue<>();
-    protected final ConcurrentMap<String,Map<Address,StreamObserver<View>>> views=new ConcurrentHashMap<>();
+    protected final Collection<StreamObserver<Message>>    observers=new ConcurrentLinkedQueue<>();
+    protected final ConcurrentMap<String,SynchronizedMap>  views=new ConcurrentHashMap<>();
 
 
     @Override
@@ -44,25 +46,19 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
         return new StreamObserver<JoinRequest>() {
             public void onNext(JoinRequest req) {
                 final String  cluster=req.getClusterName();
-                final Address addr=req.getLocalAddr();
-                final View    view=req.getView();
-                boolean       added=false;
+                final Address joiner=req.getAddress();
 
-
-                Map<Address,StreamObserver<View>> map;
-                synchronized(views) {
-                    map=views.computeIfAbsent(cluster, k -> new LinkedHashMap());
-                    if(map.putIfAbsent(addr, responseObserver) == null)
-                        added=true;
-                    if(view != null) {
-                        for(Address mbr : view.getMemberList()) {
-                            if(map.putIfAbsent(mbr, responseObserver) == null)
-                                added=true;
-                        }
-                    }
+                SynchronizedMap m=views.computeIfAbsent(cluster, k -> new SynchronizedMap(new LinkedHashMap()));
+                Map<Address,StreamObserver<View>> map=m.getMap();
+                Lock lock=m.getLock();
+                lock.lock();
+                try {
+                    if(map.putIfAbsent(joiner, responseObserver) == null)
+                        postView(map);
                 }
-                if(added)
-                    postView(map);
+                finally {
+                    lock.unlock();
+                }
             }
 
             public void onError(Throwable t) {
@@ -84,10 +80,12 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
         if(leaver == null)
             return;
 
-        Map<Address,StreamObserver<View>> map;
-        synchronized(views) {
-            map=views.get(cluster);
-            if(map != null) {
+        SynchronizedMap m=views.get(cluster);
+        if(m != null) {
+            Map<Address,StreamObserver<View>> map=m.getMap();
+            Lock lock=m.getLock();
+            lock.lock();
+            try {
                 StreamObserver<View> observer=map.remove(leaver);
                 if(observer != null) {
                     removed=true;
@@ -96,7 +94,12 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
                 if(removed)
                     postView(map);
             }
+            finally {
+                lock.unlock();
+            }
         }
+
+
         responseObserver.onNext(Void.newBuilder().build());
         responseObserver.onCompleted();
     }
@@ -105,17 +108,21 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
         if(observer == null)
             return;
 
-        synchronized(views) {
-            for(Map.Entry<String,Map<Address,StreamObserver<View>>> entry : views.entrySet()) {
-                String cluster=entry.getKey();
-                Map<Address,StreamObserver<View>> map=entry.getValue();
+        for(Map.Entry<String,SynchronizedMap> entry : views.entrySet()) {
+            String cluster=entry.getKey();
+            SynchronizedMap m=entry.getValue();
+            Map<Address,StreamObserver<View>> map=m.getMap();
+            Lock lock=m.getLock();
+            lock.lock();
+            try {
                 map.values().removeIf(val -> Objects.equals(val, observer));
                 if(map.isEmpty())
                     views.remove(cluster);
-                else {
-                    // post new view
+                else
                     postView(map);
-                }
+            }
+            finally {
+                lock.unlock();
             }
         }
     }
@@ -139,18 +146,32 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
             view_builder.addMember(mbr);
         View new_view=view_builder.build();
 
-        for(Map.Entry<Address,StreamObserver<View>> entry: map.entrySet()) {
-            Address              key=entry.getKey();
-            StreamObserver<View> val=entry.getValue();
+        for(Iterator<Map.Entry<Address,StreamObserver<View>>> it=map.entrySet().iterator(); it.hasNext();) {
+            Map.Entry<Address,StreamObserver<View>> entry=it.next();
+            StreamObserver<View>                    val=entry.getValue();
             try {
                 val.onNext(new_view);
             }
             catch(Throwable t) {
-                map.remove(key);
+                it.remove();
             }
         }
     }
 
+
+    protected static class SynchronizedMap {
+        protected final Map<Address,StreamObserver<View>> map;
+        protected final Lock                              lock=new ReentrantLock();
+
+        public SynchronizedMap(Map<Address,StreamObserver<View>> map) {
+            this.map=map;
+        }
+
+        protected Map<Address,StreamObserver<View>> getMap() {return map;}
+        protected Lock                              getLock() {return lock;}
+        //protected void lock() {lock.lock();}
+        //protected void unlock() {lock.unlock();}
+    }
 
 
    /* protected static AddressList diff(View first, View second) {

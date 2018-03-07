@@ -21,8 +21,7 @@ message Message {
 
 message JoinRequest {
     string  cluster_name = 1;
-    Address local_addr   = 2;
-    View    view         = 3;
+    Address address      = 2;
 }
 
 /** Used for graceful leaves. Ungraceful leaves (e.g. crashes) are detected by the RelayService directly  */

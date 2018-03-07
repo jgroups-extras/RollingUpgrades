@@ -47,7 +47,7 @@ public class RelayClient {
 
             }
         });
-        JoinRequest req=JoinRequest.newBuilder().setLocalAddr(local_addr).setClusterName(CLUSTER).build();
+        JoinRequest req=JoinRequest.newBuilder().setAddress(local_addr).setClusterName(CLUSTER).build();
         join_req.onNext(req);
 
 
