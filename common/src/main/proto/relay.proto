@@ -7,10 +7,8 @@ option java_multiple_files = true;
 
 
 service RelayService {
-    rpc Relay (stream Message)     returns (stream Message);
-    rpc Join  (stream JoinRequest) returns (stream View);
+    rpc Connect (stream Request)   returns (stream Response);
     rpc Leave (LeaveRequest)       returns (Void);
-
     rpc Dump (Void) returns (DumpResponse);
 }
 
@@ -40,10 +38,21 @@ message View {
     repeated Address member=1;
 }
 
-/** Same as View, but used when we want a list of addresses, not a view (the diff is merely conceptual) */
-//message AddressList {
-  //  repeated Address member = 1;
-//}
+
+message Request {
+    oneof one_of {
+        Message     message  = 1;
+        JoinRequest join_req = 2;
+    }
+}
+
+message Response {
+    oneof one_of {
+        Message     message  = 1;
+        View        view     = 2;
+    }
+}
+
 
 message Void {
     // contains nothing

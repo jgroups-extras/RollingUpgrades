@@ -14,13 +14,13 @@ import java.util.concurrent.TimeUnit;
  * @since x.y
  */
 public class RelayClient {
-    protected ManagedChannel                    channel;
-    protected RelayServiceGrpc.RelayServiceStub asyncStub;
+    protected ManagedChannel                            channel;
+    protected RelayServiceGrpc.RelayServiceStub         asyncStub;
     protected RelayServiceGrpc.RelayServiceBlockingStub blocking_stub;
-    protected final Address                     local_addr;
-    protected View                              view; // the current view
-    protected StreamObserver<JoinRequest>       join_req;
-    protected static final String               CLUSTER="grpc";
+    protected StreamObserver<Request>                   send_stream; // for sending of messages and join requests
+    protected final Address                             local_addr;
+    protected View                                      view; // the current view
+    protected static final String                       CLUSTER="grpc";
 
 
     public RelayClient(String addr) {
@@ -34,27 +34,17 @@ public class RelayClient {
         asyncStub=RelayServiceGrpc.newStub(channel);
         blocking_stub=RelayServiceGrpc.newBlockingStub(channel);
 
-        join_req=asyncStub.join(new StreamObserver<View>() {
-            public void onNext(View v) {
-                System.out.printf("-- received view %s\n", Utils.print(v));
-                RelayClient.this.view=v;
-            }
-
-            public void onError(Throwable t) {
-
-            }
-
-            public void onCompleted() {
-
-            }
-        });
-        JoinRequest req=JoinRequest.newBuilder().setAddress(local_addr).setClusterName(CLUSTER).build();
-        join_req.onNext(req);
-
-
-        StreamObserver<Message> send_stream=asyncStub.relay(new StreamObserver<Message>() {
-            public void onNext(Message msg) {
-                System.out.printf("received message from %s: %s\n", msg.getSender().getAddress(), new String(msg.getPayload().toByteArray()));
+        send_stream=asyncStub.connect(new StreamObserver<Response>() {
+            public void onNext(Response rsp) {
+                if(rsp.hasMessage()) {
+                    handleMessage(rsp.getMessage());
+                    return;
+                }
+                if(rsp.hasView()) {
+                    handleView(rsp.getView());
+                    return;
+                }
+                throw new IllegalStateException(String.format("response is illegal: %s", rsp));
             }
 
             public void onError(Throwable t) {
@@ -65,6 +55,10 @@ public class RelayClient {
                 System.out.println("server is done");
             }
         });
+
+        JoinRequest join_req=JoinRequest.newBuilder().setAddress(local_addr).setClusterName(CLUSTER).build();
+        Request req=Request.newBuilder().setJoinReq(join_req).build();
+        send_stream.onNext(req);
 
         BufferedReader in=new BufferedReader(new InputStreamReader(System.in));
         while(true) {
@@ -85,7 +79,8 @@ public class RelayClient {
 
                 Message msg=Message.newBuilder().setClusterName(CLUSTER).setSender(local_addr)
                   .setPayload(ByteString.copyFrom(line.getBytes())).build();
-                send_stream.onNext(msg);
+                Request r=Request.newBuilder().setMessage(msg).build();
+                send_stream.onNext(r);
             }
             catch(Exception e) {
                 e.printStackTrace();
@@ -94,6 +89,16 @@ public class RelayClient {
 
         send_stream.onCompleted();
     }
+
+    protected void handleView(View v) {
+        System.out.printf("-- received view %s\n", Utils.print(v));
+        RelayClient.this.view=v;
+    }
+
+    protected static void handleMessage(Message msg) {
+        System.out.printf("received message from %s: %s\n", msg.getSender().getAddress(), new String(msg.getPayload().toByteArray()));
+    }
+
 
     protected void stop() throws InterruptedException {
         channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);

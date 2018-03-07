@@ -4,7 +4,6 @@ import io.grpc.stub.StreamObserver;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -12,63 +11,69 @@ import java.util.concurrent.locks.ReentrantLock;
 /**
  * @author Bela Ban
  * @since  1.0.0
+ * todo: Add logging instead of System.err.printf
  */
 public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
-    protected final Collection<StreamObserver<Message>>    observers=new ConcurrentLinkedQueue<>();
-    protected final ConcurrentMap<String,SynchronizedMap>  views=new ConcurrentHashMap<>();
-
+    // protected final Collection<StreamObserver<Message>>    observers=new ConcurrentLinkedQueue<>();
+    protected final ConcurrentMap<String,SynchronizedMap> members=new ConcurrentHashMap<>();
 
     @Override
-    public StreamObserver<Message> relay(StreamObserver<Message> responseObserver) {
-        observers.add(responseObserver);
-        System.out.printf("-- relay(): %d observers\n", observers.size());
-
-        return new StreamObserver<Message>() {
-            public void onNext(Message msg) {
-                relay(msg);
+    public StreamObserver<Request> connect(StreamObserver<Response> responseObserver) {
+        return new StreamObserver<Request>() {
+            public void onNext(Request req) {
+                if(req.hasMessage()) {
+                    handleMessage(req.getMessage());
+                    return;
+                }
+                if(req.hasJoinReq()) {
+                    handleJoinRequest(req.getJoinReq(), responseObserver);
+                    return;
+                }
+                throw new IllegalStateException(String.format("request is illegal: %s", req));
             }
 
             public void onError(Throwable t) {
-                System.out.printf("exception: %s. Removing observer\n", t);
-                observers.remove(responseObserver);
+                remove(responseObserver);
             }
 
             public void onCompleted() {
-                System.out.printf("Removing observer %s\n", responseObserver);
-                observers.remove(responseObserver);
+                remove(responseObserver);
             }
         };
     }
 
 
-    @Override
-    public StreamObserver<JoinRequest> join(StreamObserver<View> responseObserver) {
-        return new StreamObserver<JoinRequest>() {
-            public void onNext(JoinRequest req) {
-                final String  cluster=req.getClusterName();
-                final Address joiner=req.getAddress();
+    protected void handleJoinRequest(JoinRequest join_req, StreamObserver<Response> responseObserver) {
+        final String  cluster=join_req.getClusterName();
+        final Address joiner=join_req.getAddress();
 
-                SynchronizedMap m=views.computeIfAbsent(cluster, k -> new SynchronizedMap(new LinkedHashMap()));
-                Map<Address,StreamObserver<View>> map=m.getMap();
-                Lock lock=m.getLock();
-                lock.lock();
-                try {
-                    if(map.putIfAbsent(joiner, responseObserver) == null)
-                        postView(map);
-                }
-                finally {
-                    lock.unlock();
-                }
-            }
+        SynchronizedMap m=members.computeIfAbsent(cluster, k -> new SynchronizedMap(new LinkedHashMap()));
+        Map<Address,StreamObserver<Response>> map=m.getMap();
+        Lock lock=m.getLock();
+        lock.lock();
+        try {
+            if(map.putIfAbsent(joiner, responseObserver) == null)
+                postView(map);
+        }
+        finally {
+            lock.unlock();
+        }
+    }
 
-            public void onError(Throwable t) {
-                remove(responseObserver);
-            }
+    protected void handleMessage(Message msg) {
+        String cluster=msg.getClusterName();
+        Address dest=msg.hasDestination()? msg.getDestination() : null;
 
-            public void onCompleted() {
-                remove(responseObserver);
-            }
-        };
+        SynchronizedMap mbrs=members.get(cluster);
+        if(mbrs == null) {
+            System.err.printf("no members found for cluster %s\n", cluster);
+            return;
+        }
+
+        if(dest == null)
+            relayToAll(msg, mbrs);
+        else
+            relayTo(msg, mbrs);
     }
 
     @Override
@@ -80,13 +85,13 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
         if(leaver == null)
             return;
 
-        SynchronizedMap m=views.get(cluster);
+        SynchronizedMap m=members.get(cluster);
         if(m != null) {
-            Map<Address,StreamObserver<View>> map=m.getMap();
+            Map<Address,StreamObserver<Response>> map=m.getMap();
             Lock lock=m.getLock();
             lock.lock();
             try {
-                StreamObserver<View> observer=map.remove(leaver);
+                StreamObserver<Response> observer=map.remove(leaver);
                 if(observer != null) {
                     removed=true;
                     observer.onCompleted();
@@ -110,20 +115,20 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
     }
 
 
-    protected void remove(StreamObserver<View> observer) {
+    protected void remove(StreamObserver<Response> observer) {
         if(observer == null)
             return;
 
-        for(Map.Entry<String,SynchronizedMap> entry : views.entrySet()) {
+        for(Map.Entry<String,SynchronizedMap> entry : members.entrySet()) {
             String cluster=entry.getKey();
             SynchronizedMap m=entry.getValue();
-            Map<Address,StreamObserver<View>> map=m.getMap();
+            Map<Address,StreamObserver<Response>> map=m.getMap();
             Lock lock=m.getLock();
             lock.lock();
             try {
                 map.values().removeIf(val -> Objects.equals(val, observer));
                 if(map.isEmpty())
-                    views.remove(cluster);
+                    members.remove(cluster);
                 else
                     postView(map);
             }
@@ -133,32 +138,71 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
         }
     }
 
-    protected void relay(Message msg) {
-        Address dest=msg.getDestination();
 
-        System.out.printf("-- relaying %s to %d observers\n", new String(msg.getPayload().toByteArray()), observers.size());
-        for(StreamObserver<Message> obs: observers) {
-            try {
-                obs.onNext(msg);
+    protected void relayToAll(Message msg, SynchronizedMap m) {
+        Map<Address,StreamObserver<Response>> map=m.getMap();
+        Lock lock=m.getLock();
+        lock.lock();
+        try {
+            if(!map.isEmpty()) {
+                System.out.printf("-- relaying msg to %d members for cluster %s\n", map.size(), msg.getClusterName());
+                Response response=Response.newBuilder().setMessage(msg).build();
+                for(StreamObserver<Response> obs: map.values()) {
+                    try {
+                        obs.onNext(response);
+                    }
+                    catch(Throwable t) {
+                        System.out.printf("exception relaying message (removing observer): %s\n", t);
+                        remove(obs);
+                    }
+                }
             }
-            catch(Throwable t) {
-                System.out.printf("exception relaying message (removing observer): %s\n", t);
-                observers.remove(obs);
-            }
+        }
+        finally {
+            lock.unlock();
         }
     }
 
-    protected static void postView(Map<Address,StreamObserver<View>> map) {
+    protected void relayTo(Message msg, SynchronizedMap m) {
+        Address dest=msg.getDestination();
+        Map<Address,StreamObserver<Response>> map=m.getMap();
+        Lock lock=m.getLock();
+        lock.lock();
+        try {
+            StreamObserver<Response> obs=map.get(dest);
+            if(obs == null) {
+                System.err.printf("unicast destination %s not found; dropping message\n", dest.getAddress());
+                return;
+            }
+
+            System.out.printf("-- relaying msg to member %s for cluster %s\n", dest.getAddress(), msg.getClusterName());
+            Response response=Response.newBuilder().setMessage(msg).build();
+            try {
+                obs.onNext(response);
+            }
+            catch(Throwable t) {
+                System.out.printf("exception relaying message to %s (removing observer): %s\n", dest.getAddress(), t);
+                remove(obs);
+            }
+        }
+        finally {
+            lock.unlock();
+        }
+    }
+
+
+    protected static void postView(Map<Address,StreamObserver<Response>> map) {
         View.Builder view_builder=View.newBuilder();
         for(Address mbr: map.keySet())
             view_builder.addMember(mbr);
         View new_view=view_builder.build();
+        Response response=Response.newBuilder().setView(new_view).build();
 
-        for(Iterator<Map.Entry<Address,StreamObserver<View>>> it=map.entrySet().iterator(); it.hasNext();) {
-            Map.Entry<Address,StreamObserver<View>> entry=it.next();
-            StreamObserver<View>                    val=entry.getValue();
+        for(Iterator<Map.Entry<Address,StreamObserver<Response>>> it=map.entrySet().iterator(); it.hasNext();) {
+            Map.Entry<Address,StreamObserver<Response>> entry=it.next();
+            StreamObserver<Response>                    val=entry.getValue();
             try {
-                val.onNext(new_view);
+                val.onNext(response);
             }
             catch(Throwable t) {
                 it.remove();
@@ -168,16 +212,16 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
 
     protected String dumpDiagnostics() {
         StringBuilder sb=new StringBuilder();
-        sb.append(String.format("%d observers\nviews:\n", observers.size()));
+        sb.append("members:\n");
         dumpViews(sb);
         return sb.append("\n").toString();
     }
 
     protected void dumpViews(final StringBuilder sb) {
-        for(Map.Entry<String,SynchronizedMap> entry: views.entrySet()) {
+        for(Map.Entry<String,SynchronizedMap> entry: members.entrySet()) {
             String cluster=entry.getKey();
             SynchronizedMap m=entry.getValue();
-            Map<Address,StreamObserver<View>> map=m.getMap();
+            Map<Address,StreamObserver<Response>> map=m.getMap();
             Lock lock=m.getLock();
             lock.lock();
             try {
@@ -191,28 +235,15 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
 
 
     protected static class SynchronizedMap {
-        protected final Map<Address,StreamObserver<View>> map;
-        protected final Lock                              lock=new ReentrantLock();
+        protected final Map<Address,StreamObserver<Response>> map;
+        protected final Lock                                  lock=new ReentrantLock();
 
-        public SynchronizedMap(Map<Address,StreamObserver<View>> map) {
+        public SynchronizedMap(Map<Address,StreamObserver<Response>> map) {
             this.map=map;
         }
 
-        protected Map<Address,StreamObserver<View>> getMap() {return map;}
-        protected Lock                              getLock() {return lock;}
+        protected Map<Address,StreamObserver<Response>> getMap() {return map;}
+        protected Lock                                  getLock() {return lock;}
     }
 
-
-   /* protected static AddressList diff(View first, View second) {
-        if(first == null || second == null)
-            return null;
-        List<Address> first_list=first.getMemberList(), second_list=second.getMemberList();
-        first_list.removeAll(second_list);
-        if(first_list.isEmpty())
-            return null;
-        AddressList.Builder builder=AddressList.newBuilder();
-        for(Address address: first_list)
-            builder.addMember(address);
-        return builder.build();
-    }*/
 }
