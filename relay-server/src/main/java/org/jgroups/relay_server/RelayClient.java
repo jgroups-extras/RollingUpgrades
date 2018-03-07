@@ -76,6 +76,12 @@ public class RelayClient {
                     break;
                 }
 
+                if(line.startsWith("dump")) {
+                    DumpResponse response=blocking_stub.dump(Void.newBuilder().build());
+                    System.out.printf("%s\n", response.getDump());
+                    continue;
+                }
+
                 Message msg=Message.newBuilder()
                   .setClusterName(CLUSTER)
                   .setSender(local_addr)

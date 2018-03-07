@@ -10,6 +10,8 @@ service RelayService {
     rpc Relay (stream Message)     returns (stream Message);
     rpc Join  (stream JoinRequest) returns (stream View);
     rpc Leave (LeaveRequest)       returns (Void);
+
+    rpc Dump (Void) returns (DumpResponse);
 }
 
 message Message {
@@ -45,4 +47,8 @@ message View {
 
 message Void {
     // contains nothing
+}
+
+message DumpResponse {
+    string dump = 1;
 }

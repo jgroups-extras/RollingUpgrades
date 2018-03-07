@@ -98,11 +98,17 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
                 lock.unlock();
             }
         }
-
-
         responseObserver.onNext(Void.newBuilder().build());
         responseObserver.onCompleted();
     }
+
+    @Override
+    public void dump(Void request, StreamObserver<DumpResponse> responseObserver) {
+        String result=dumpDiagnostics();
+        responseObserver.onNext(DumpResponse.newBuilder().setDump(result).build());
+        responseObserver.onCompleted();
+    }
+
 
     protected void remove(StreamObserver<View> observer) {
         if(observer == null)
@@ -158,6 +164,29 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
         }
     }
 
+    protected String dumpDiagnostics() {
+        StringBuilder sb=new StringBuilder();
+        sb.append(String.format("%d observers\nviews:\n", observers.size()));
+        dumpViews(sb);
+        return sb.append("\n").toString();
+    }
+
+    protected void dumpViews(final StringBuilder sb) {
+        for(Map.Entry<String,SynchronizedMap> entry: views.entrySet()) {
+            String cluster=entry.getKey();
+            SynchronizedMap m=entry.getValue();
+            Map<Address,StreamObserver<View>> map=m.getMap();
+            Lock lock=m.getLock();
+            lock.lock();
+            try {
+                sb.append(cluster).append(": ").append(Utils.print(map.keySet())).append("\n");
+            }
+            finally {
+                lock.unlock();
+            }
+        }
+    }
+
 
     protected static class SynchronizedMap {
         protected final Map<Address,StreamObserver<View>> map;
@@ -169,8 +198,6 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
 
         protected Map<Address,StreamObserver<View>> getMap() {return map;}
         protected Lock                              getLock() {return lock;}
-        //protected void lock() {lock.lock();}
-        //protected void unlock() {lock.unlock();}
     }
 
 
