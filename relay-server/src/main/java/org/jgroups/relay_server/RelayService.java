@@ -25,7 +25,7 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
 
         return new StreamObserver<Message>() {
             public void onNext(Message msg) {
-                postToAll(msg);
+                relay(msg);
             }
 
             public void onError(Throwable t) {
@@ -133,7 +133,9 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
         }
     }
 
-    protected void postToAll(Message msg) {
+    protected void relay(Message msg) {
+        Address dest=msg.getDestination();
+
         System.out.printf("-- relaying %s to %d observers\n", new String(msg.getPayload().toByteArray()), observers.size());
         for(StreamObserver<Message> obs: observers) {
             try {

@@ -83,11 +83,8 @@ public class RelayClient {
                     continue;
                 }
 
-                Message msg=Message.newBuilder()
-                  .setClusterName(CLUSTER)
-                  .setSender(local_addr)
-                  .setPayload(ByteString.copyFrom(line.getBytes()))
-                  .build();
+                Message msg=Message.newBuilder().setClusterName(CLUSTER).setSender(local_addr)
+                  .setPayload(ByteString.copyFrom(line.getBytes())).build();
                 send_stream.onNext(msg);
             }
             catch(Exception e) {
