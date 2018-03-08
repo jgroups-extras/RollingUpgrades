@@ -64,7 +64,7 @@ public class RelayClient {
         while(true) {
             try {
                 System.out.print("> "); System.out.flush();
-                String line=in.readLine().toLowerCase();
+                String line=in.readLine();
                 if(line.startsWith("quit") || line.startsWith("exit")) {
                     blocking_stub.leave(LeaveRequest.newBuilder().setClusterName(CLUSTER).setLeaver(local_addr).build());
                     System.out.println("Client left gracefully");
@@ -99,10 +99,11 @@ public class RelayClient {
         int index=line.indexOf(':');
         if(index == -1)
             return;
-        String member_name=line.substring("unicast ".length(), index-1);
+        String member_name=line.substring("unicast ".length(), index);
+        String message=line.substring(index+1).trim();
         Address dest=Address.newBuilder().setName(member_name).build();
         Message msg=Message.newBuilder().setClusterName(CLUSTER).setSender(local_addr).setDestination(dest)
-          .setPayload(ByteString.copyFrom(line.getBytes())).build();
+          .setPayload(ByteString.copyFrom(message.getBytes())).build();
         Request r=Request.newBuilder().setMessage(msg).build();
         send_stream.onNext(r);
     }
