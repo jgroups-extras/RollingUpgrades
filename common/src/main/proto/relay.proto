@@ -31,11 +31,17 @@ message LeaveRequest {
 }
 
 message Address {
-    string address=1;
+    string name = 1;
+    UUID   uuid = 2;
 }
 
 message View {
     repeated Address member=1;
+}
+
+message UUID {
+    int64 most_sig   = 1; // most significant bits
+    int64 least_sig  = 2; // least significant bits
 }
 
 

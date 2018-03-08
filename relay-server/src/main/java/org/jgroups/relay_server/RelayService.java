@@ -171,17 +171,17 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
         try {
             StreamObserver<Response> obs=map.get(dest);
             if(obs == null) {
-                System.err.printf("unicast destination %s not found; dropping message\n", dest.getAddress());
+                System.err.printf("unicast destination %s not found; dropping message\n", dest.getName());
                 return;
             }
 
-            System.out.printf("-- relaying msg to member %s for cluster %s\n", dest.getAddress(), msg.getClusterName());
+            System.out.printf("-- relaying msg to member %s for cluster %s\n", dest.getName(), msg.getClusterName());
             Response response=Response.newBuilder().setMessage(msg).build();
             try {
                 obs.onNext(response);
             }
             catch(Throwable t) {
-                System.out.printf("exception relaying message to %s (removing observer): %s\n", dest.getAddress(), t);
+                System.out.printf("exception relaying message to %s (removing observer): %s\n", dest.getName(), t);
                 remove(obs);
             }
         }

@@ -9,10 +9,10 @@ import java.util.stream.Collectors;
  */
 public class Utils {
     public static String print(View v) {
-        return String.format("[%s]", v.getMemberList().stream().map(Address::getAddress).collect(Collectors.joining(", ")));
+        return String.format("[%s]", v.getMemberList().stream().map(Address::getName).collect(Collectors.joining(", ")));
     }
 
     public static String print(Collection<Address> addresses) {
-        return String.format("[%s]", addresses.stream().map(Address::getAddress).collect(Collectors.joining(", ")));
+        return String.format("[%s]", addresses.stream().map(Address::getName).collect(Collectors.joining(", ")));
     }
 }

@@ -24,7 +24,7 @@ public class RelayClient {
 
 
     public RelayClient(String addr) {
-        local_addr=Address.newBuilder().setAddress(addr).build();
+        local_addr=Address.newBuilder().setName(addr).build();
     }
 
 
@@ -77,6 +77,11 @@ public class RelayClient {
                     continue;
                 }
 
+                if(line.startsWith("unicast")) {
+                    handleUnicast(line);
+                    continue;
+                }
+
                 Message msg=Message.newBuilder().setClusterName(CLUSTER).setSender(local_addr)
                   .setPayload(ByteString.copyFrom(line.getBytes())).build();
                 Request r=Request.newBuilder().setMessage(msg).build();
@@ -90,13 +95,25 @@ public class RelayClient {
         send_stream.onCompleted();
     }
 
+    protected void handleUnicast(String line) {
+        int index=line.indexOf(':');
+        if(index == -1)
+            return;
+        String member_name=line.substring("unicast ".length(), index-1);
+        Address dest=Address.newBuilder().setName(member_name).build();
+        Message msg=Message.newBuilder().setClusterName(CLUSTER).setSender(local_addr).setDestination(dest)
+          .setPayload(ByteString.copyFrom(line.getBytes())).build();
+        Request r=Request.newBuilder().setMessage(msg).build();
+        send_stream.onNext(r);
+    }
+
     protected void handleView(View v) {
         System.out.printf("-- received view %s\n", Utils.print(v));
         RelayClient.this.view=v;
     }
 
     protected static void handleMessage(Message msg) {
-        System.out.printf("received message from %s: %s\n", msg.getSender().getAddress(), new String(msg.getPayload().toByteArray()));
+        System.out.printf("received message from %s: %s\n", msg.getSender().getName(), new String(msg.getPayload().toByteArray()));
     }
 
 
