@@ -14,6 +14,8 @@ import org.jgroups.stack.Protocol;
 import org.jgroups.util.NameCache;
 import org.jgroups.util.UUID;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.stream.Collectors;
 
 /**
@@ -135,7 +137,9 @@ public class RELAY3 extends Protocol {
     }
 
     protected void handleView(View view) {
-        System.out.printf("received view %s\n", print(view));
+        // System.out.printf("received view %s\n", print(view));
+        org.jgroups.View jg_view=protobufViewToJGroupsView(view);
+        up_prot.up(new Event(Event.VIEW_CHANGE, jg_view));
 
     }
 
@@ -195,6 +199,16 @@ public class RELAY3 extends Protocol {
         return jgroups_mgs;
     }
 
+    protected static org.jgroups.View protobufViewToJGroupsView(View v) {
+        ViewId pbuf_vid=v.getViewId();
+        List<org.jgroups.relay_server.Address> pbuf_mbrs=v.getMemberList();
+        org.jgroups.ViewId jg_vid=new org.jgroups.ViewId(protobufAddressToJGroupsAddress(pbuf_vid.getCreator()),
+                                                         pbuf_vid.getId());
+        List<Address> members=new ArrayList<>();
+        pbuf_mbrs.stream().map(RELAY3::protobufAddressToJGroupsAddress).forEach(members::add);
+        return new org.jgroups.View(jg_vid, members);
+    }
+
     protected static String print(org.jgroups.relay_server.Message msg) {
         return String.format("cluster: %s sender: %s dest: %s %d bytes\n", msg.getClusterName(),
                              msg.hasDestination()? msg.getDestination().getName() : "null",
@@ -203,7 +217,16 @@ public class RELAY3 extends Protocol {
     }
 
     public static String print(View v) {
-        return String.format("[%s]", v.getMemberList().stream().map(org.jgroups.relay_server.Address::getName).collect(Collectors.joining(", ")));
+        if(v.hasViewId()) {
+            ViewId view_id=v.getViewId();
+            return String.format("%s|%d [%s]",
+                          view_id.getCreator().getName(), view_id.getId(),
+                          v.getMemberList().stream().map(org.jgroups.relay_server.Address::getName)
+                                   .collect(Collectors.joining(", ")));
+        }
+        return String.format("[%s]",
+                             v.getMemberList().stream().map(org.jgroups.relay_server.Address::getName)
+                               .collect(Collectors.joining(", ")));
     }
 
 

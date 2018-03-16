@@ -16,6 +16,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
     // protected final Collection<StreamObserver<Message>>    observers=new ConcurrentLinkedQueue<>();
     protected final ConcurrentMap<String,SynchronizedMap> members=new ConcurrentHashMap<>();
+    protected long                                        view_id=0; // global, for all clusters, but who cares
 
     @Override
     public StreamObserver<Request> connect(StreamObserver<Response> responseObserver) {
@@ -43,38 +44,7 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
     }
 
 
-    protected void handleJoinRequest(JoinRequest join_req, StreamObserver<Response> responseObserver) {
-        final String  cluster=join_req.getClusterName();
-        final Address joiner=join_req.getAddress();
 
-        SynchronizedMap m=members.computeIfAbsent(cluster, k -> new SynchronizedMap(new LinkedHashMap()));
-        Map<Address,StreamObserver<Response>> map=m.getMap();
-        Lock lock=m.getLock();
-        lock.lock();
-        try {
-            if(map.putIfAbsent(joiner, responseObserver) == null)
-                postView(map);
-        }
-        finally {
-            lock.unlock();
-        }
-    }
-
-    protected void handleMessage(Message msg) {
-        String cluster=msg.getClusterName();
-        Address dest=msg.hasDestination()? msg.getDestination() : null;
-
-        SynchronizedMap mbrs=members.get(cluster);
-        if(mbrs == null) {
-            System.err.printf("no members found for cluster %s\n", cluster);
-            return;
-        }
-
-        if(dest == null)
-            relayToAll(msg, mbrs);
-        else
-            relayTo(msg, mbrs);
-    }
 
     @Override
     public void leave(LeaveRequest req, StreamObserver<Void> responseObserver) {
@@ -138,6 +108,39 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
         }
     }
 
+    protected void handleJoinRequest(JoinRequest join_req, StreamObserver<Response> responseObserver) {
+        final String  cluster=join_req.getClusterName();
+        final Address joiner=join_req.getAddress();
+
+        SynchronizedMap m=members.computeIfAbsent(cluster, k -> new SynchronizedMap(new LinkedHashMap()));
+        Map<Address,StreamObserver<Response>> map=m.getMap();
+        Lock lock=m.getLock();
+        lock.lock();
+        try {
+            if(map.putIfAbsent(joiner, responseObserver) == null)
+                postView(map);
+        }
+        finally {
+            lock.unlock();
+        }
+    }
+
+    protected void handleMessage(Message msg) {
+        String cluster=msg.getClusterName();
+        Address dest=msg.hasDestination()? msg.getDestination() : null;
+
+        SynchronizedMap mbrs=members.get(cluster);
+        if(mbrs == null) {
+            System.err.printf("no members found for cluster %s\n", cluster);
+            return;
+        }
+
+        if(dest == null)
+            relayToAll(msg, mbrs);
+        else
+            relayTo(msg, mbrs);
+    }
+
 
     protected void relayToAll(Message msg, SynchronizedMap m) {
         Map<Address,StreamObserver<Response>> map=m.getMap();
@@ -191,10 +194,16 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
     }
 
 
-    protected static void postView(Map<Address,StreamObserver<Response>> map) {
+    protected void postView(Map<Address,StreamObserver<Response>> map) {
         View.Builder view_builder=View.newBuilder();
-        for(Address mbr: map.keySet())
+        Address coord=null;
+        for(Address mbr: map.keySet()) {
             view_builder.addMember(mbr);
+            if(coord == null)
+                coord=mbr;
+        }
+        view_builder.setViewId(ViewId.newBuilder().setCreator(coord).setId(getNewViewId()).build());
+
         View new_view=view_builder.build();
         Response response=Response.newBuilder().setView(new_view).build();
 
@@ -233,6 +242,8 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
         }
     }
 
+    protected synchronized long getNewViewId() {return view_id++;}
+
 
     protected static class SynchronizedMap {
         protected final Map<Address,StreamObserver<Response>> map;
@@ -242,8 +253,8 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
             this.map=map;
         }
 
-        protected Map<Address,StreamObserver<Response>> getMap() {return map;}
-        protected Lock                                  getLock() {return lock;}
+        protected Map<Address,StreamObserver<Response>> getMap()       {return map;}
+        protected Lock                                  getLock()      {return lock;}
     }
 
 }

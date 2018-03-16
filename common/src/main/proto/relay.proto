@@ -35,8 +35,14 @@ message Address {
     UUID   uuid = 2;
 }
 
+message ViewId {
+    int64 id        = 1;
+    Address creator = 2;
+}
+
 message View {
-    repeated Address member=1;
+    ViewId           view_id = 1;
+    repeated Address member  = 2;
 }
 
 message UUID {
