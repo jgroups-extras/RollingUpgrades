@@ -148,3 +148,6 @@ to all cluster members, which de-activate `RELAY3` (or even remove it from the s
 
 
 
+=== Misc
+* In a first stage, only addresses of type UUID are implemented
+* Application headers are currently not supported (perhaps they never will)

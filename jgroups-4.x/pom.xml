@@ -16,11 +16,11 @@
 
    <dependencies>
       
-      <!--<dependency>
+      <dependency>
          <groupId>org.jgroups.rolling-upgrades</groupId>
-         <artifactId>parent</artifactId>
+         <artifactId>common</artifactId>
          <version>${project.version}</version>
-      </dependency>-->
+      </dependency>
 
       <dependency>
          <groupId>org.jgroups</groupId>
