@@ -22,6 +22,7 @@ import java.util.stream.Collectors;
  * @author Bela Ban
  * @since  1.0
  * @todo: implement support for addresses other than UUID-based ones
+ * @todo: implement reconnection to server (server went down amnd then up again)
  */
 @MBean(description="Protocol that redirects all messages to/from a RelayServer")
 public class RELAY3 extends Protocol {
