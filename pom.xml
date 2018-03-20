@@ -14,6 +14,8 @@
         <module>jgroups-4.x</module>
     </modules>
 
+    <!--localRepository>/home/bela/.m2/jboss-repository</localRepository-->
+
     <description>
         Rolling upgrades of a JGroups cluster
     </description>
