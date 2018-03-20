@@ -14,15 +14,5 @@
    <name>common</name>
    <description>Common functionality</description>
 
-   <dependencies>
-      
-      <!--<dependency>
-         <groupId>org.jgroups.rolling-upgrades</groupId>
-         <artifactId>parent</artifactId>
-         <version>${project.version}</version>
-      </dependency>-->
-
-   </dependencies>
-
 
 </project>
