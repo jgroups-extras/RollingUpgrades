@@ -28,8 +28,21 @@ public class RelayServer {
     }
 
     public static void main(String[] args) throws Exception {
+        int port=50051;
         RelayServer srv=new RelayServer();
-        srv.start(50051);
+        for(int i=0; i < args.length; i++) {
+            if(args[i].equals("-p") || args[i].equals("-port")) {
+                port=Integer.valueOf(args[++i]);
+                continue;
+            }
+            help();
+            return;
+        }
+        srv.start(port);
         srv.stop();
+    }
+
+    protected static void help() {
+        System.out.println("RelayServer [-port <server port>]");
     }
 }
