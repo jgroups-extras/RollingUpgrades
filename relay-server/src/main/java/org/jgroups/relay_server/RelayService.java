@@ -14,7 +14,6 @@ import java.util.concurrent.locks.ReentrantLock;
  * todo: Add logging instead of System.err.printf
  */
 public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
-    // protected final Collection<StreamObserver<Message>>    observers=new ConcurrentLinkedQueue<>();
     protected final ConcurrentMap<String,SynchronizedMap> members=new ConcurrentHashMap<>();
     protected long                                        view_id=0; // global, for all clusters, but who cares
 
@@ -148,7 +147,7 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
         lock.lock();
         try {
             if(!map.isEmpty()) {
-                System.out.printf("-- relaying msg to %d members for cluster %s\n", map.size(), msg.getClusterName());
+                //System.out.printf("-- relaying msg to %d members for cluster %s\n", map.size(), msg.getClusterName());
                 Response response=Response.newBuilder().setMessage(msg).build();
                 for(StreamObserver<Response> obs: map.values()) {
                     try {
@@ -178,13 +177,13 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
                 return;
             }
 
-            System.out.printf("-- relaying msg to member %s for cluster %s\n", dest.getName(), msg.getClusterName());
+            //System.out.printf("-- relaying msg to member %s for cluster %s\n", dest.getName(), msg.getClusterName());
             Response response=Response.newBuilder().setMessage(msg).build();
             try {
                 obs.onNext(response);
             }
             catch(Throwable t) {
-                System.out.printf("exception relaying message to %s (removing observer): %s\n", dest.getName(), t);
+                System.err.printf("exception relaying message to %s (removing observer): %s\n", dest.getName(), t);
                 remove(obs);
             }
         }
