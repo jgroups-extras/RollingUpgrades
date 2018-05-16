@@ -12,6 +12,7 @@
         <module>common</module>
         <module>relay-server</module>
         <module>jgroups-4.x</module>
+        <module>jgroups-3.6</module>
     </modules>
 
     <properties>
