@@ -8,6 +8,7 @@ import org.jgroups.Address;
 import org.jgroups.Event;
 import org.jgroups.Message;
 import org.jgroups.annotations.MBean;
+import org.jgroups.annotations.ManagedOperation;
 import org.jgroups.annotations.Property;
 import org.jgroups.relay_server.*;
 import org.jgroups.stack.Protocol;
@@ -19,15 +20,16 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
+ * Relays application messages to the RelayServer (when active). Should be the top protocol in a stack.
  * @author Bela Ban
  * @since  1.0
- * @todo: implement support for addresses other than UUID-based ones
- * @todo: implement reconnection to server (server went down amnd then up again)
+ * @todo: implement support for addresses other than UUIDs
+ * @todo: implement reconnection to server (server went down and then up again)
  */
 @MBean(description="Protocol that redirects all messages to/from a RelayServer")
 public class RELAY3 extends Protocol {
 
-    @Property(description="Whether or not to perform relaying via the relay server")
+    @Property(description="Whether or not to perform relaying via the relay server",writable=false)
     protected boolean                                   active;
 
     @Property(description="The IP address (or symbolic name) of the relay server")
@@ -42,15 +44,30 @@ public class RELAY3 extends Protocol {
     protected String                                    cluster;
     protected ManagedChannel                            channel;
     protected RelayServiceGrpc.RelayServiceStub         asyncStub;
-    protected RelayServiceGrpc.RelayServiceBlockingStub blocking_stub;
     protected StreamObserver<Request>                   send_stream; // for sending of messages and join requests
+
+
+    @ManagedOperation(description="Enable forwarding and receiving of messages to/from the RelayServer")
+    public void activate() {
+        if(!active) {
+            connect(cluster);
+            active=true;
+        }
+    }
+
+    @ManagedOperation(description="Disable forwarding and receiving of messages to/from the RelayServer")
+    public void deactivate() {
+        if(active) {
+           disconnect();
+           active=false;
+        }
+    }
 
 
     public void start() throws Exception {
         super.start();
         channel=ManagedChannelBuilder.forAddress(server_address, server_port).usePlaintext(true).build();
         asyncStub=RelayServiceGrpc.newStub(channel);
-        blocking_stub=RelayServiceGrpc.newBlockingStub(channel);
     }
 
     public void stop() {
@@ -92,13 +109,13 @@ public class RELAY3 extends Protocol {
     }
 
     public Object down(Message msg) {
-        if(active) {
-            // relay via relay server
-            Request req=Request.newBuilder().setMessage(jgroupsMessageToProtobufMessage(cluster, msg)).build();
-            send_stream.onNext(req);
-            return null;
-        }
-        return down_prot.down(msg);
+        if(!active)
+            return down_prot.down(msg);
+
+        // else send to RelayServer
+        Request req=Request.newBuilder().setMessage(jgroupsMessageToProtobufMessage(cluster, msg)).build();
+        send_stream.onNext(req);
+        return null;
     }
 
 

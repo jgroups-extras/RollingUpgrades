@@ -14,6 +14,10 @@
    <name>jgroups-4.x</name>
    <description>Protocol for JGroups 4.x</description>
 
+    <properties>
+        <version.jgroups>4.0.11.Final</version.jgroups>
+    </properties>
+
    <dependencies>
       
       <dependency>
