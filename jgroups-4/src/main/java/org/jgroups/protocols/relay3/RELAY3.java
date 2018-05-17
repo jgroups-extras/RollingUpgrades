@@ -48,7 +48,7 @@ public class RELAY3 extends Protocol {
 
 
     @ManagedOperation(description="Enable forwarding and receiving of messages to/from the RelayServer")
-    public void activate() {
+    public synchronized void activate() {
         if(!active) {
             connect(cluster);
             active=true;
@@ -56,7 +56,7 @@ public class RELAY3 extends Protocol {
     }
 
     @ManagedOperation(description="Disable forwarding and receiving of messages to/from the RelayServer")
-    public void deactivate() {
+    public synchronized void deactivate() {
         if(active) {
            disconnect();
            active=false;
@@ -87,7 +87,8 @@ public class RELAY3 extends Protocol {
             case Event.CONNECT_WITH_STATE_TRANSFER_USE_FLUSH:
                 cluster=evt.arg();
                 Object ret=down_prot.down(evt);
-                connect(cluster);
+                if(active)
+                    connect(cluster);
                 return ret;
             case Event.DISCONNECT:
                 ret=down_prot.down(evt);
