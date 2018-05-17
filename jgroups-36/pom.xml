@@ -9,9 +9,9 @@
       <relativePath>../pom.xml</relativePath>
    </parent>
 
-   <artifactId>jgroups-3.6</artifactId>
+   <artifactId>jgroups-36</artifactId>
    <packaging>jar</packaging>
-   <name>jgroups-3.6</name>
+   <name>jgroups-36</name>
    <description>Protocol for JGroups 3.6</description>
 
     <properties>

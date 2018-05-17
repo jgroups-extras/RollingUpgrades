@@ -9,9 +9,9 @@
       <relativePath>../pom.xml</relativePath>
    </parent>
 
-   <artifactId>jgroups-4.x</artifactId>
+   <artifactId>jgroups-4</artifactId>
    <packaging>jar</packaging>
-   <name>jgroups-4.x</name>
+   <name>jgroups-4</name>
    <description>Protocol for JGroups 4.x</description>
 
     <properties>
