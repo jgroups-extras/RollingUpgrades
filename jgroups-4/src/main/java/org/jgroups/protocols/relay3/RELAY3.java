@@ -8,6 +8,7 @@ import org.jgroups.Address;
 import org.jgroups.Event;
 import org.jgroups.Message;
 import org.jgroups.annotations.MBean;
+import org.jgroups.annotations.ManagedAttribute;
 import org.jgroups.annotations.ManagedOperation;
 import org.jgroups.annotations.Property;
 import org.jgroups.relay_server.*;
@@ -30,7 +31,7 @@ import java.util.stream.Collectors;
 public class RELAY3 extends Protocol {
 
     @Property(description="Whether or not to perform relaying via the relay server",writable=false)
-    protected boolean                                   active;
+    protected volatile boolean                          active;
 
     @Property(description="The IP address (or symbolic name) of the relay server")
     protected String                                    server_address="localhost";
@@ -38,9 +39,16 @@ public class RELAY3 extends Protocol {
     @Property(description="The port on which the relay server is listening")
     protected int                                       server_port=50051;
 
-
+    @ManagedAttribute(description="The local address")
     protected Address                                   local_addr;
+
+    @ManagedAttribute(description="Shows the local view")
     protected org.jgroups.View                          local_view;
+
+    @ManagedAttribute(description="The global view (provided by the RelayServer)")
+    protected org.jgroups.View                          global_view;
+
+    @ManagedAttribute(description="The cluster this member is a part of")
     protected String                                    cluster;
     protected ManagedChannel                            channel;
     protected RelayServiceGrpc.RelayServiceStub         asyncStub;
@@ -114,8 +122,10 @@ public class RELAY3 extends Protocol {
             return down_prot.down(msg);
 
         // else send to RelayServer
-        Request req=Request.newBuilder().setMessage(jgroupsMessageToProtobufMessage(cluster, msg)).build();
-        send_stream.onNext(req);
+        if(send_stream != null) {
+            Request req=Request.newBuilder().setMessage(jgroupsMessageToProtobufMessage(cluster, msg)).build();
+            send_stream.onNext(req);
+        }
         return null;
     }
 
@@ -152,12 +162,15 @@ public class RELAY3 extends Protocol {
 
 
     protected synchronized void disconnect() {
-        send_stream.onCompleted();
+        if(send_stream != null)
+            send_stream.onCompleted();
+        global_view=null;
     }
 
     protected void handleView(View view) {
         // System.out.printf("received view %s\n", print(view));
         org.jgroups.View jg_view=protobufViewToJGroupsView(view);
+        global_view=jg_view;
         up_prot.up(new Event(Event.VIEW_CHANGE, jg_view));
 
     }
