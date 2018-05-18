@@ -20,7 +20,7 @@ public class RelayClient {
     protected StreamObserver<Request>                   send_stream; // for sending of messages and join requests
     protected final Address                             local_addr;
     protected View                                      view; // the current view
-    protected static final String                       CLUSTER="grpc";
+    protected static final String                       CLUSTER="relay-client";
 
 
     public RelayClient(String addr) {
@@ -66,7 +66,9 @@ public class RelayClient {
                 System.out.print("> "); System.out.flush();
                 String line=in.readLine();
                 if(line.startsWith("quit") || line.startsWith("exit")) {
-                    blocking_stub.leave(LeaveRequest.newBuilder().setClusterName(CLUSTER).setLeaver(local_addr).build());
+                    LeaveRequest lr=LeaveRequest.newBuilder().setClusterName(CLUSTER).setLeaver(local_addr).build();
+                    req=Request.newBuilder().setLeaveReq(lr).build();
+                    send_stream.onNext(req);
                     System.out.println("Client left gracefully");
                     break;
                 }
