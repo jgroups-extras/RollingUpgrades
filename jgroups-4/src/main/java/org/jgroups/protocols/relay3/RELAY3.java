@@ -162,8 +162,15 @@ public class RELAY3 extends Protocol {
 
 
     protected synchronized void disconnect() {
-        if(send_stream != null)
+        if(send_stream != null) {
+            if(local_addr != null && cluster != null) {
+                org.jgroups.relay_server.Address local=jgroupsAddressToProtobufAddress(local_addr);
+                LeaveRequest leave_req=LeaveRequest.newBuilder().setClusterName(cluster).setLeaver(local).build();
+                Request request=Request.newBuilder().setLeaveReq(leave_req).build();
+                send_stream.onNext(request);
+            }
             send_stream.onCompleted();
+        }
         global_view=null;
     }
 

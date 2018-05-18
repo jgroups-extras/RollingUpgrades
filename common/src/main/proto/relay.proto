@@ -7,9 +7,9 @@ option java_multiple_files = true;
 
 
 service RelayService {
-    rpc Connect (stream Request)   returns (stream Response);
-    rpc Leave (LeaveRequest)       returns (Void);
-    rpc Dump (Void) returns (DumpResponse);
+    rpc Connect (stream Request) returns (stream Response);
+    rpc Leave (LeaveRequest)     returns (Void);
+    rpc Dump (Void)              returns (DumpResponse);
 }
 
 message Message {
@@ -27,7 +27,7 @@ message JoinRequest {
 /** Used for graceful leaves. Ungraceful leaves (e.g. crashes) are detected by the RelayService directly  */
 message LeaveRequest {
     string      cluster_name = 1;
-    Address     leaver = 2;
+    Address     leaver       = 2;
 }
 
 message Address {
@@ -53,8 +53,9 @@ message UUID {
 
 message Request {
     oneof one_of {
-        Message     message  = 1;
-        JoinRequest join_req = 2;
+        Message      message   = 1;
+        JoinRequest  join_req  = 2;
+        LeaveRequest leave_req = 3;
     }
 }
 

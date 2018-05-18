@@ -29,7 +29,11 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
                     handleJoinRequest(req.getJoinReq(), responseObserver);
                     return;
                 }
-                throw new IllegalStateException(String.format("request is illegal: %s", req));
+                if(req.hasLeaveReq()) {
+                    handleLeaveRequest(req.getLeaveReq(), responseObserver);
+                    return;
+                }
+                System.err.printf("request not known: %s\n", req);
             }
 
             public void onError(Throwable t) {
@@ -124,6 +128,34 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
         }
     }
 
+    protected void handleLeaveRequest(LeaveRequest leave_req, StreamObserver<Response> responseObserver) {
+        final String  cluster=leave_req.getClusterName();
+        boolean       removed=false;
+        Address       leaver=leave_req.getLeaver();
+
+        if(leaver == null)
+            return;
+
+        SynchronizedMap m=members.get(cluster);
+        if(m != null) {
+            Map<Address,StreamObserver<Response>> map=m.getMap();
+            Lock lock=m.getLock();
+            lock.lock();
+            try {
+                StreamObserver<Response> observer=map.remove(leaver);
+                if(observer != null) {
+                    removed=true;
+                    observer.onCompleted();
+                }
+                if(removed && !map.isEmpty())
+                    postView(map);
+            }
+            finally {
+                lock.unlock();
+            }
+        }
+    }
+
     protected void handleMessage(Message msg) {
         String cluster=msg.getClusterName();
         Address dest=msg.hasDestination()? msg.getDestination() : null;
@@ -194,6 +226,8 @@ public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
 
 
     protected void postView(Map<Address,StreamObserver<Response>> map) {
+        if(map == null || map.isEmpty())
+            return;
         View.Builder view_builder=View.newBuilder();
         Address coord=null;
         for(Address mbr: map.keySet()) {
