@@ -13,10 +13,11 @@ service RelayService {
 }
 
 message Message {
-    string  cluster_name = 1;
-    Address destination  = 2; // null: send to all
-    Address sender       = 3;
-    bytes   payload      = 4;
+    string    cluster_name = 1;
+    Address   destination  = 2; // null: send to all
+    Address   sender       = 3;
+    bytes     payload      = 4;
+    RpcHeader rpc_header   = 5; // if the message is an RPC, otherwise this field will be null
 }
 
 message JoinRequest {
@@ -73,4 +74,11 @@ message Void {
 
 message DumpResponse {
     string dump = 1;
+}
+
+/** Header used for RPCs (RpcDispatcher / MessageDispatcher) */
+message RpcHeader {
+    int32 type       = 1; // request, response, exception
+    int64 request_id = 2;
+    int32 corr_id    = 3;
 }

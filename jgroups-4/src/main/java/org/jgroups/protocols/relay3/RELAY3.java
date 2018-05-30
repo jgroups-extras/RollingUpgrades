@@ -11,6 +11,8 @@ import org.jgroups.annotations.MBean;
 import org.jgroups.annotations.ManagedAttribute;
 import org.jgroups.annotations.ManagedOperation;
 import org.jgroups.annotations.Property;
+import org.jgroups.blocks.RequestCorrelator;
+import org.jgroups.conf.ClassConfigurator;
 import org.jgroups.relay_server.*;
 import org.jgroups.stack.Protocol;
 import org.jgroups.util.NameCache;
@@ -53,6 +55,8 @@ public class RELAY3 extends Protocol {
     protected ManagedChannel                            channel;
     protected RelayServiceGrpc.RelayServiceStub         asyncStub;
     protected StreamObserver<Request>                   send_stream; // for sending of messages and join requests
+
+    protected static final short                        REQ_ID=ClassConfigurator.getProtocolId(RequestCorrelator.class);
 
 
     @ManagedOperation(description="Enable forwarding and receiving of messages to/from the RelayServer")
@@ -214,6 +218,7 @@ public class RELAY3 extends Protocol {
             return null;
         Address destination=jgroups_msg.getDest(), sender=jgroups_msg.getSrc();
         byte[] payload=jgroups_msg.getBuffer();
+        RequestCorrelator.Header hdr=jgroups_msg.getHeader(REQ_ID);
 
         org.jgroups.relay_server.Message.Builder msg_builder=org.jgroups.relay_server.Message.newBuilder()
           .setClusterName(cluster);
@@ -223,6 +228,10 @@ public class RELAY3 extends Protocol {
             msg_builder.setSender(jgroupsAddressToProtobufAddress(sender));
         if(payload != null)
             msg_builder.setPayload(ByteString.copyFrom(payload));
+        if(hdr != null) {
+            RpcHeader pbuf_hdr=jgroupsReqHeaderToProtobufRpcHeader(hdr);
+            msg_builder.setRpcHeader(pbuf_hdr);
+        }
         return msg_builder.build();
     }
 
@@ -235,6 +244,10 @@ public class RELAY3 extends Protocol {
         ByteString payload=msg.getPayload();
         if(!payload.isEmpty())
             jgroups_mgs.setBuffer(payload.toByteArray());
+        if(msg.hasRpcHeader()) {
+            RequestCorrelator.Header hdr=protobufRpcHeaderToJGroupsReqHeader(msg.getRpcHeader());
+            jgroups_mgs.putHeader(REQ_ID, hdr);
+        }
         return jgroups_mgs;
     }
 
@@ -246,6 +259,17 @@ public class RELAY3 extends Protocol {
         List<Address> members=new ArrayList<>();
         pbuf_mbrs.stream().map(RELAY3::protobufAddressToJGroupsAddress).forEach(members::add);
         return new org.jgroups.View(jg_vid, members);
+    }
+
+    protected static RpcHeader jgroupsReqHeaderToProtobufRpcHeader(RequestCorrelator.Header hdr) {
+        return RpcHeader.newBuilder().setType(hdr.type).setRequestId(hdr.req_id).setCorrId(hdr.corrId).build();
+    }
+
+    protected static RequestCorrelator.Header protobufRpcHeaderToJGroupsReqHeader(RpcHeader hdr) {
+        byte type=(byte)hdr.getType();
+        long request_id=hdr.getRequestId();
+        short corr_id=(short)hdr.getCorrId();
+        return (RequestCorrelator.Header)new RequestCorrelator.Header(type, request_id, corr_id).setProtId(REQ_ID);
     }
 
     protected static String print(org.jgroups.relay_server.Message msg) {

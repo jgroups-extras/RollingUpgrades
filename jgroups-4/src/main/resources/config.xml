@@ -36,7 +36,7 @@
     <MFC max_credits="2M"
          min_threshold="0.4"/>
     <FRAG2 frag_size="60K"  />
-    <relay3.RELAY3 active="false"
+    <relay3.RELAY3 active="true"
                    server_address="localhost"
                    server_port="50051"/>
 </config>
