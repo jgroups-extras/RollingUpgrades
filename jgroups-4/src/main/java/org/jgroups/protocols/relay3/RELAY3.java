@@ -127,6 +127,8 @@ public class RELAY3 extends Protocol {
 
         // else send to RelayServer
         if(send_stream != null) {
+            if(msg.getSrc() == null)
+                msg.setSrc(local_addr);
             Request req=Request.newBuilder().setMessage(jgroupsMessageToProtobufMessage(cluster, msg)).build();
             send_stream.onNext(req);
         }
