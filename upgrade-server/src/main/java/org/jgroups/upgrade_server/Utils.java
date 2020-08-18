@@ -1,4 +1,4 @@
-package org.jgroups.relay_server;
+package org.jgroups.upgrade_server;
 
 import java.util.Collection;
 import java.util.stream.Collectors;

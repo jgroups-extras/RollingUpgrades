@@ -1,14 +1,13 @@
 = Rolling upgrades of a JGroups cluster
 
-This document describes how to upgrade a JGroups cluster to a new, backwards-incompatible version,
+This document describes how to upgrade a JGroups cluster to a new, incompatible version,
 or a new configuration. The term _incompatible_ means that the nodes running on the new version
 (or configuration) would be unable to form a cluster with the existing nodes.
 
 Upgrading a cluster to a new version is critical for some customers, who cannot afford downtime.
 
-The design is influenced by how Kubernetes applies a new configuration: it adds a new pod,
-running with the new configuration, then kills off an existing one, until all existing pods
-have been replaced.
+The design is influenced by how Kubernetes applies a new configuration: it adds a new pod, running with the new
+configuration, then kills off an existing one, until all existing pods have been replaced.
 
 == Overview
 
@@ -38,12 +37,12 @@ a message to `B1`.
 === Design
 
 In order to achieve the above goals, all application messages are sent to a JGroups-independent
-server (the _RelayServer_), which relays them to all registered cluster nodes, as shown below:
+server (the _UpgradeServer_), which relays them to all registered cluster nodes, as shown below:
 
 ----
-                    ---------------
-                    | RelayServer |
-                    ---------------
+                    -----------------
+                    | UpgradeServer |
+                    -----------------
                            ^
                            |
                            |
@@ -56,10 +55,10 @@ server (the _RelayServer_), which relays them to all registered cluster nodes, a
       ----    ----    ----      ----   ----
 ----
 
-Each node knows the address of the RelayServer and registers with it by establishing a TCP connection.
-The RelayServer maintains a table of clusters mapped to nodes belonging to them.
+Each node knows the address of the UpgradeServer and registers with it by establishing a TCP connection.
+The UpgradeServer maintains a table of clusters mapped to nodes belonging to them.
 
-When a message is received from one of the nodes, the RelayServer forwards the message to registered
+When a message is received from one of the nodes, the UpgradeServer forwards the message to registered
 nodes (multicast message), or to an individual node (unicast message).
 
 NOTE: When talking about messages above, we're not referring to `org.jgroups.Message`, but instead to
@@ -70,10 +69,10 @@ the application the illusion of a global cluster with both existing and new memb
 view. This is needed for example by Infinispan to compute the consistent hash wheel correctly, and
 perform correct data rebalancing when (e.g.) `B1` is started.
 
-NOTE: It is paramount that the communication protocol between a node and the RelayServer is well defined
-and never changes, so that different versions of JGroups can talk to the same RelayServer.
+NOTE: It is paramount that the communication protocol between a node and the UpgradeServer is well defined
+and never changes, so that different versions of JGroups can talk to the same UpgradeServer.
 
-The communication on the client (cluster node) side is performed by `RELAY3`:
+The communication on the client (cluster node) side is performed by `UPGRADE`:
 
 ----
             Application
@@ -82,9 +81,9 @@ The communication on the client (cluster node) side is performed by `RELAY3`:
                  | (send, receive)
                  |
                  v
-            -----------         (forward,receive)          ---------------
-            |  RELAY3 | <------------------------------->  | RelayServer |
-            -----------   (JGroups-independent protocol)   ---------------
+            -----------         (forward,receive)          -----------------
+            | UPGRADE | <------------------------------->  | UpgradeServer |
+            -----------   (JGroups-independent protocol)   -----------------
             |  FRAG3  |
             -----------
             | NAKACK2 |
@@ -93,28 +92,28 @@ The communication on the client (cluster node) side is performed by `RELAY3`:
             -----------
 ----
 
-`RELAY3` is added at the top of the stack. When active, it forwards all application messages to the
-RelayServer, instead of sending them down the stack. When not active, messages are not forwarded to the
+`UPGRADE` is added at the top of the stack. When active, it forwards all application messages to the
+UpgradeServer, instead of sending them down the stack. When not active, messages are not forwarded to the
 server, but simply sent down the stack.
 
-When it receives a message from the RelayServer, it passes it up the stack to the application.
+When it receives a message from the UpgradeServer, it passes it up the stack to the application.
 
-When a cluster member joins, `RELAY3` will get the view of the local cluster (e.g. `{A1,A2,A3}`)
+When a cluster member joins, `UPGRADE` will get the view of the local cluster (e.g. `{A1,A2,A3}`)
 from below. It stores the local view, but does not pass it up to the application. Instead, it asks
-the RelayServer to add it to the current global view. The RelayServer then creates a new global
-virtual view and sends it to all registered cluster members. Their `RELAY3` protocols send that
+the UpgradeServer to add it to the current global view. The UpgradeServer then creates a new global
+virtual view and sends it to all registered cluster members. Their `UPGRADE` protocols send that
 global view up the stack to the application.
 
-This means, that applications with a stack that has `RELAY3` at the top will never receive cluster-local
-views, but only global views created by the RelayServer.
+This means, that applications with a stack that has `UPGRADE` at the top will never receive cluster-local
+views, but only global views created by the UpgradeServer.
 
-The communication protocol between `RELAY3` and RelayServer needs to be well defined and should never
-change, so that different JGroups versions can talks to the server as long as their `RELAY3` protocol
+The communication protocol between `UPGRADE` and UpgradeServer needs to be well defined and should never
+change, so that different JGroups versions can talks to the server as long as their `UPGRADE` protocol
 implements the communication protocol correctly.
 
 This design is similar to `RELAY` (https://github.com/belaban/JGroups/blob/master/src/org/jgroups/protocols/RELAY.java),
-but uses an external RelayServer and a version agnostic communication protocol to talk to it,
-so that different JGroups versions can talk to each other (via RelayServer).
+but uses an external UpgradeServer and a version agnostic communication protocol to talk to it,
+so that different JGroups versions can talk to each other (via UpgradeServer).
 
 
 
@@ -125,26 +124,26 @@ Say we have cluster members `{A1,A2,A3}`, running on JGroups 3.6. We want to upg
 4.x, resulting in a cluster `{B1,B2,B3}`. The following steps need to be taken when running on
 Kubernetes:
 
-* A new service/pod needs to be started with the RelayServer. It runs on a given address and port.
-* The 3.6 configuration is changed to contain `RELAY3` at the top. (If already present, this and the
-next step can be skipped). Alternatively, `RELAY3` can be added to the existing cluster members
+* A new service/pod needs to be started with the UpgradeServer. It runs on a given address and port.
+* The 3.6 configuration is changed to contain `UPGRADE` at the top. (If already present, this and the
+next step can be skipped). Alternatively, `UPGRADE` can be added to the existing cluster members
 dynamically via `probe.sh` (see the JGroups manual for details).
-** Note that `RELAY3` is configured to be inactive, so no messages are relayed, and no global
+** Note that `UPGRADE` is configured to be inactive, so no messages are relayed, and no global
 views are installed.
 * `kubectl apply` is executed to update all cluster members to a 3.6 configuration that contains
-`RELAY3`.
-* Once this is done, `RELAY3` in all cluster members is configured to be active. This can be done
-via the RelayServer sending an `ACTIVATE` command to the cluster members. From now one, virtual
+`UPGRADE`.
+* Once this is done, `UPGRADE` in all cluster members is configured to be active. This can be done
+via the UpgradeServer sending an `ACTIVATE` command to the cluster members. From now one, virtual
 global views and message relaying is enabled.
 * `kubectl apply` is executed *to apply a new configuration*. The new configuration points to an image
 with JGroups 4.x (the existing cluster members are running on 3.6), and possibly a new JGroups config.
 * Kubernetes starts a new pod with the new config and then kills off an existing node (as described
 in the overview section).
-** The new config includes an _active_ `RELAY3` protocol at the top of the stack
-* When members are added/killed, a new global view will be installed via RelayServer
-* When all members have been updated to the new version, RelayServer sends an `DEACTIVATE` command
-to all cluster members, which de-activate `RELAY3` (or even remove it from the stack).
-* The RelayServer pod can now safely be killed.
+** The new config includes an _active_ `UPGRADE` protocol at the top of the stack
+* When members are added/killed, a new global view will be installed via UpgradeServer
+* When all members have been updated to the new version, UpgradeServer sends an `DEACTIVATE` command
+to all cluster members, which de-activate `UPGRADE` (or even remove it from the stack).
+* The UpgradeServer pod can now safely be killed.
 
 
 

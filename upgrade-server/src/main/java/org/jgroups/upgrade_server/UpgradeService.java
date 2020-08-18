@@ -1,4 +1,4 @@
-package org.jgroups.relay_server;
+package org.jgroups.upgrade_server;
 
 import io.grpc.stub.StreamObserver;
 
@@ -13,7 +13,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * @since  1.0.0
  * todo: Add logging instead of System.err.printf
  */
-public class RelayService extends RelayServiceGrpc.RelayServiceImplBase {
+public class UpgradeService extends UpgradeServiceGrpc.UpgradeServiceImplBase {
     protected final ConcurrentMap<String,SynchronizedMap> members=new ConcurrentHashMap<>();
     protected long                                        view_id=0; // global, for all clusters, but who cares
 

@@ -1,22 +1,22 @@
-package org.jgroups.relay_server;
+package org.jgroups.upgrade_server;
 
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 
 import java.util.concurrent.TimeUnit;
 
-/** Dumps the contents of the RelayServer's registered clusters and members
+/** Dumps the contents of the UpgradeServer's registered clusters and members
  * @author Bela Ban
  * @since 1.0.0
  */
 public class Dump {
-    protected ManagedChannel                            channel;
-    protected RelayServiceGrpc.RelayServiceBlockingStub blocking_stub;
+    protected ManagedChannel                                channel;
+    protected UpgradeServiceGrpc.UpgradeServiceBlockingStub blocking_stub;
 
 
     protected void start(String host, int port) throws InterruptedException {
-        channel=ManagedChannelBuilder.forAddress(host, port).usePlaintext(true).build();
-        blocking_stub=RelayServiceGrpc.newBlockingStub(channel);
+        channel=ManagedChannelBuilder.forAddress(host, port).usePlaintext().build();
+        blocking_stub=UpgradeServiceGrpc.newBlockingStub(channel);
         DumpResponse response=blocking_stub.dump(Void.newBuilder().build());
         System.out.printf("%s\n", response.getDump());
     }

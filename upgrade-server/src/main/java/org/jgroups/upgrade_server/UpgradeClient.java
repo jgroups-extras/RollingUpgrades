@@ -1,4 +1,4 @@
-package org.jgroups.relay_server;
+package org.jgroups.upgrade_server;
 
 import com.google.protobuf.ByteString;
 import io.grpc.ManagedChannel;
@@ -13,26 +13,26 @@ import java.util.concurrent.TimeUnit;
  * @author Bela Ban
  * @since x.y
  */
-public class RelayClient {
-    protected ManagedChannel                            channel;
-    protected RelayServiceGrpc.RelayServiceStub         asyncStub;
-    protected RelayServiceGrpc.RelayServiceBlockingStub blocking_stub;
-    protected StreamObserver<Request>                   send_stream; // for sending of messages and join requests
-    protected final Address                             local_addr;
-    protected View                                      view; // the current view
-    protected static final String                       CLUSTER="relay-client";
+public class UpgradeClient {
+    protected ManagedChannel                                channel;
+    protected UpgradeServiceGrpc.UpgradeServiceStub         asyncStub;
+    protected UpgradeServiceGrpc.UpgradeServiceBlockingStub blocking_stub;
+    protected StreamObserver<Request>                       send_stream; // for sending of messages and join requests
+    protected final Address                                 local_addr;
+    protected View                                          view; // the current view
+    protected static final String                           CLUSTER="upgrade-client";
 
 
-    public RelayClient(String addr) {
+    public UpgradeClient(String addr) {
         local_addr=Address.newBuilder().setName(addr).build();
     }
 
 
 
     protected void start(int port) throws InterruptedException {
-        channel=ManagedChannelBuilder.forAddress("localhost", port).usePlaintext(true).build();
-        asyncStub=RelayServiceGrpc.newStub(channel);
-        blocking_stub=RelayServiceGrpc.newBlockingStub(channel);
+        channel=ManagedChannelBuilder.forAddress("localhost", port).usePlaintext().build();
+        asyncStub=UpgradeServiceGrpc.newStub(channel);
+        blocking_stub=UpgradeServiceGrpc.newBlockingStub(channel);
 
         send_stream=asyncStub.connect(new StreamObserver<Response>() {
             public void onNext(Response rsp) {
@@ -112,7 +112,7 @@ public class RelayClient {
 
     protected void handleView(View v) {
         System.out.printf("-- received view %s\n", Utils.print(v));
-        RelayClient.this.view=v;
+        UpgradeClient.this.view=v;
     }
 
     protected static void handleMessage(Message msg) {
@@ -125,7 +125,7 @@ public class RelayClient {
     }
 
     public static void main(String[] args) throws InterruptedException {
-        RelayClient client=new RelayClient(args[0]);
+        UpgradeClient client=new UpgradeClient(args[0]);
         client.start(50051);
         client.stop();
     }

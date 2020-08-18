@@ -9,10 +9,10 @@
       <relativePath>../pom.xml</relativePath>
    </parent>
 
-   <artifactId>relay-server</artifactId>
+   <artifactId>upgrade-server</artifactId>
    <packaging>jar</packaging>
-   <name>RelayServer</name>
-   <description>RelayServer</description>
+   <name>UpgradeServer</name>
+   <description>UpgradeServer</description>
 
    <properties>
       <module.skipComponentMetaDataProcessing>false</module.skipComponentMetaDataProcessing>
@@ -25,10 +25,16 @@
          <artifactId>common</artifactId>
          <version>${project.version}</version>
       </dependency>
+       <dependency>
+           <groupId>io.netty</groupId>
+           <artifactId>netty-tcnative</artifactId>
+           <version>2.0.32.Final</version>
+
+       </dependency>
 
    </dependencies>
 
-    <!-- Generates the uberjar for RelayServer plus dependencies -->
+    <!-- Generates the uberjar for UpgradeServer plus dependencies -->
     <build>
         <plugins>
             <plugin>
@@ -41,7 +47,7 @@
                     </descriptorRefs>
                     <archive>
                         <manifest>
-                            <mainClass>org.jgroups.relay_server.RelayServer</mainClass>
+                            <mainClass>org.jgroups.upgrade_server.UpgradeServer</mainClass>
                         </manifest>
                     </archive>
                 </configuration>

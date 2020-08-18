@@ -1,4 +1,4 @@
-package org.jgroups.protocols.relay3;
+package org.jgroups.protocols.upgrade;
 
 import com.google.protobuf.ByteString;
 import io.grpc.ManagedChannel;
@@ -11,11 +11,8 @@ import org.jgroups.annotations.MBean;
 import org.jgroups.annotations.ManagedAttribute;
 import org.jgroups.annotations.ManagedOperation;
 import org.jgroups.annotations.Property;
-import org.jgroups.blocks.RequestCorrelator;
-import org.jgroups.conf.ClassConfigurator;
-import org.jgroups.relay_server.*;
+import org.jgroups.upgrade_server.*;
 import org.jgroups.stack.Protocol;
-import org.jgroups.util.NameCache;
 import org.jgroups.util.UUID;
 
 import java.util.ArrayList;
@@ -23,22 +20,22 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Relays application messages to the RelayServer (when active). Should be the top protocol in a stack.
+ * Relays application messages to the UpgradeServer (when active). Should be the top protocol in a stack.
  * @author Bela Ban
  * @since  1.0
  * @todo: implement support for addresses other than UUIDs
  * @todo: implement reconnection to server (server went down and then up again)
  */
-@MBean(description="Protocol that redirects all messages to/from a RelayServer")
-public class RELAY3 extends Protocol {
+@MBean(description="Protocol that redirects all messages to/from a UpgradeServer")
+public class UPGRADE extends Protocol {
 
-    @Property(description="Whether or not to perform relaying via the relay server",writable=false)
+    @Property(description="Whether or not to perform relaying via the UpgradeServer",writable=false)
     protected volatile boolean                          active;
 
-    @Property(description="The IP address (or symbolic name) of the relay server")
+    @Property(description="The IP address (or symbolic name) of the UpgradeServer")
     protected String                                    server_address="localhost";
 
-    @Property(description="The port on which the relay server is listening")
+    @Property(description="The port on which the UpgradeServer is listening")
     protected int                                       server_port=50051;
 
     @ManagedAttribute(description="The local address")
@@ -47,19 +44,17 @@ public class RELAY3 extends Protocol {
     @ManagedAttribute(description="Shows the local view")
     protected org.jgroups.View                          local_view;
 
-    @ManagedAttribute(description="The global view (provided by the RelayServer)")
+    @ManagedAttribute(description="The global view (provided by the UpgradeServer)")
     protected org.jgroups.View                          global_view;
 
     @ManagedAttribute(description="The cluster this member is a part of")
     protected String                                    cluster;
     protected ManagedChannel                            channel;
-    protected RelayServiceGrpc.RelayServiceStub         asyncStub;
+    protected UpgradeServiceGrpc.UpgradeServiceStub     asyncStub;
     protected StreamObserver<Request>                   send_stream; // for sending of messages and join requests
 
-    protected static final short                        REQ_ID=ClassConfigurator.getProtocolId(RequestCorrelator.class);
 
-
-    @ManagedOperation(description="Enable forwarding and receiving of messages to/from the RelayServer")
+    @ManagedOperation(description="Enable forwarding and receiving of messages to/from the UpgradeServer")
     public synchronized void activate() {
         if(!active) {
             connect(cluster);
@@ -67,7 +62,7 @@ public class RELAY3 extends Protocol {
         }
     }
 
-    @ManagedOperation(description="Disable forwarding and receiving of messages to/from the RelayServer")
+    @ManagedOperation(description="Disable forwarding and receiving of messages to/from the UpgradeServer")
     public synchronized void deactivate() {
         if(active) {
            disconnect();
@@ -78,8 +73,8 @@ public class RELAY3 extends Protocol {
 
     public void start() throws Exception {
         super.start();
-        channel=ManagedChannelBuilder.forAddress(server_address, server_port).usePlaintext(true).build();
-        asyncStub=RelayServiceGrpc.newStub(channel);
+        channel=ManagedChannelBuilder.forAddress(server_address, server_port).usePlaintext().build();
+        asyncStub=UpgradeServiceGrpc.newStub(channel);
     }
 
     public void stop() {
@@ -90,6 +85,16 @@ public class RELAY3 extends Protocol {
 
     public Object down(Event evt) {
         switch(evt.type()) {
+            case Event.MSG:
+                if(!active)
+                    return down_prot.down(evt);
+                // else send to UpgradeServer
+                if(send_stream != null) {
+                    Message msg=(Message)evt.getArg();
+                    Request req=Request.newBuilder().setMessage(jgroupsMessageToProtobufMessage(cluster, msg)).build();
+                    send_stream.onNext(req);
+                }
+                return null;
             case Event.SET_LOCAL_ADDRESS:
                 local_addr=evt.arg();
                 break;
@@ -121,20 +126,6 @@ public class RELAY3 extends Protocol {
         return up_prot.up(evt);
     }
 
-    public Object down(Message msg) {
-        if(!active)
-            return down_prot.down(msg);
-
-        // else send to RelayServer
-        if(send_stream != null) {
-            if(msg.getSrc() == null)
-                msg.setSrc(local_addr);
-            Request req=Request.newBuilder().setMessage(jgroupsMessageToProtobufMessage(cluster, msg)).build();
-            send_stream.onNext(req);
-        }
-        return null;
-    }
-
 
 
     protected synchronized void connect(String cluster) {
@@ -159,7 +150,7 @@ public class RELAY3 extends Protocol {
                 log.debug("server is done");
             }
         });
-        org.jgroups.relay_server.Address pbuf_addr=jgroupsAddressToProtobufAddress(local_addr);
+        org.jgroups.upgrade_server.Address pbuf_addr=jgroupsAddressToProtobufAddress(local_addr);
         JoinRequest join_req=JoinRequest.newBuilder().setAddress(pbuf_addr).setClusterName(cluster).build();
         Request req=Request.newBuilder().setJoinReq(join_req).build();
         send_stream.onNext(req);
@@ -170,7 +161,7 @@ public class RELAY3 extends Protocol {
     protected synchronized void disconnect() {
         if(send_stream != null) {
             if(local_addr != null && cluster != null) {
-                org.jgroups.relay_server.Address local=jgroupsAddressToProtobufAddress(local_addr);
+                org.jgroups.upgrade_server.Address local=jgroupsAddressToProtobufAddress(local_addr);
                 LeaveRequest leave_req=LeaveRequest.newBuilder().setClusterName(cluster).setLeaver(local).build();
                 Request request=Request.newBuilder().setLeaveReq(leave_req).build();
                 send_stream.onNext(request);
@@ -188,41 +179,40 @@ public class RELAY3 extends Protocol {
 
     }
 
-    protected void handleMessage(org.jgroups.relay_server.Message m) {
+    protected void handleMessage(org.jgroups.upgrade_server.Message m) {
         // System.out.printf("received message %s\n", print(m));
         Message msg=protobufMessageToJGroupsMessage(m);
-        up_prot.up(msg);
+        up_prot.up(new Event(Event.MSG, msg));
     }
 
-    protected static org.jgroups.relay_server.Address jgroupsAddressToProtobufAddress(Address jgroups_addr) {
+    protected static org.jgroups.upgrade_server.Address jgroupsAddressToProtobufAddress(Address jgroups_addr) {
         if(jgroups_addr == null)
-            return org.jgroups.relay_server.Address.newBuilder().build();
+            return org.jgroups.upgrade_server.Address.newBuilder().build();
         if(!(jgroups_addr instanceof org.jgroups.util.UUID))
             throw new IllegalArgumentException(String.format("JGroups address has to be of type UUID but is %s",
                                                              jgroups_addr.getClass().getSimpleName()));
         UUID uuid=(UUID)jgroups_addr;
-        String name=NameCache.get(jgroups_addr);
+        String name=UUID.get(jgroups_addr);
 
-        org.jgroups.relay_server.UUID pbuf_uuid=org.jgroups.relay_server.UUID.newBuilder()
+        org.jgroups.upgrade_server.UUID pbuf_uuid=org.jgroups.upgrade_server.UUID.newBuilder()
           .setLeastSig(uuid.getLeastSignificantBits()).setMostSig(uuid.getMostSignificantBits()).build();
-        return org.jgroups.relay_server.Address.newBuilder().setUuid(pbuf_uuid).setName(name).build();
+        return org.jgroups.upgrade_server.Address.newBuilder().setUuid(pbuf_uuid).setName(name).build();
     }
 
-    protected static Address protobufAddressToJGroupsAddress(org.jgroups.relay_server.Address pbuf_addr) {
+    protected static Address protobufAddressToJGroupsAddress(org.jgroups.upgrade_server.Address pbuf_addr) {
         if(pbuf_addr == null)
             return null;
-        org.jgroups.relay_server.UUID pbuf_uuid=pbuf_addr.hasUuid()? pbuf_addr.getUuid() : null;
+        org.jgroups.upgrade_server.UUID pbuf_uuid=pbuf_addr.hasUuid()? pbuf_addr.getUuid() : null;
         return pbuf_uuid == null? null : new UUID(pbuf_uuid.getMostSig(), pbuf_uuid.getLeastSig());
     }
 
-    protected static org.jgroups.relay_server.Message jgroupsMessageToProtobufMessage(String cluster, Message jgroups_msg) {
+    protected static org.jgroups.upgrade_server.Message jgroupsMessageToProtobufMessage(String cluster, Message jgroups_msg) {
         if(jgroups_msg == null)
             return null;
         Address destination=jgroups_msg.getDest(), sender=jgroups_msg.getSrc();
         byte[] payload=jgroups_msg.getBuffer();
-        RequestCorrelator.Header hdr=jgroups_msg.getHeader(REQ_ID);
 
-        org.jgroups.relay_server.Message.Builder msg_builder=org.jgroups.relay_server.Message.newBuilder()
+        org.jgroups.upgrade_server.Message.Builder msg_builder=org.jgroups.upgrade_server.Message.newBuilder()
           .setClusterName(cluster);
         if(destination != null)
             msg_builder.setDestination(jgroupsAddressToProtobufAddress(destination));
@@ -230,14 +220,10 @@ public class RELAY3 extends Protocol {
             msg_builder.setSender(jgroupsAddressToProtobufAddress(sender));
         if(payload != null)
             msg_builder.setPayload(ByteString.copyFrom(payload));
-        if(hdr != null) {
-            RpcHeader pbuf_hdr=jgroupsReqHeaderToProtobufRpcHeader(hdr);
-            msg_builder.setRpcHeader(pbuf_hdr);
-        }
         return msg_builder.build();
     }
 
-    protected static Message protobufMessageToJGroupsMessage(org.jgroups.relay_server.Message msg) {
+    protected static Message protobufMessageToJGroupsMessage(org.jgroups.upgrade_server.Message msg) {
         Message jgroups_mgs=new Message();
         if(msg.hasDestination())
             jgroups_mgs.setDest(protobufAddressToJGroupsAddress(msg.getDestination()));
@@ -246,35 +232,20 @@ public class RELAY3 extends Protocol {
         ByteString payload=msg.getPayload();
         if(!payload.isEmpty())
             jgroups_mgs.setBuffer(payload.toByteArray());
-        if(msg.hasRpcHeader()) {
-            RequestCorrelator.Header hdr=protobufRpcHeaderToJGroupsReqHeader(msg.getRpcHeader());
-            jgroups_mgs.putHeader(REQ_ID, hdr);
-        }
         return jgroups_mgs;
     }
 
     protected static org.jgroups.View protobufViewToJGroupsView(View v) {
         ViewId pbuf_vid=v.getViewId();
-        List<org.jgroups.relay_server.Address> pbuf_mbrs=v.getMemberList();
+        List<org.jgroups.upgrade_server.Address> pbuf_mbrs=v.getMemberList();
         org.jgroups.ViewId jg_vid=new org.jgroups.ViewId(protobufAddressToJGroupsAddress(pbuf_vid.getCreator()),
                                                          pbuf_vid.getId());
         List<Address> members=new ArrayList<>();
-        pbuf_mbrs.stream().map(RELAY3::protobufAddressToJGroupsAddress).forEach(members::add);
+        pbuf_mbrs.stream().map(UPGRADE::protobufAddressToJGroupsAddress).forEach(members::add);
         return new org.jgroups.View(jg_vid, members);
     }
 
-    protected static RpcHeader jgroupsReqHeaderToProtobufRpcHeader(RequestCorrelator.Header hdr) {
-        return RpcHeader.newBuilder().setType(hdr.type).setRequestId(hdr.req_id).setCorrId(hdr.corrId).build();
-    }
-
-    protected static RequestCorrelator.Header protobufRpcHeaderToJGroupsReqHeader(RpcHeader hdr) {
-        byte type=(byte)hdr.getType();
-        long request_id=hdr.getRequestId();
-        short corr_id=(short)hdr.getCorrId();
-        return (RequestCorrelator.Header)new RequestCorrelator.Header(type, request_id, corr_id).setProtId(REQ_ID);
-    }
-
-    protected static String print(org.jgroups.relay_server.Message msg) {
+    protected static String print(org.jgroups.upgrade_server.Message msg) {
         return String.format("cluster: %s sender: %s dest: %s %d bytes\n", msg.getClusterName(),
                              msg.hasDestination()? msg.getDestination().getName() : "null",
                              msg.hasSender()? msg.getSender().getName() : "null",
@@ -286,11 +257,11 @@ public class RELAY3 extends Protocol {
             ViewId view_id=v.getViewId();
             return String.format("%s|%d [%s]",
                           view_id.getCreator().getName(), view_id.getId(),
-                          v.getMemberList().stream().map(org.jgroups.relay_server.Address::getName)
+                          v.getMemberList().stream().map(org.jgroups.upgrade_server.Address::getName)
                                    .collect(Collectors.joining(", ")));
         }
         return String.format("[%s]",
-                             v.getMemberList().stream().map(org.jgroups.relay_server.Address::getName)
+                             v.getMemberList().stream().map(org.jgroups.upgrade_server.Address::getName)
                                .collect(Collectors.joining(", ")));
     }
 

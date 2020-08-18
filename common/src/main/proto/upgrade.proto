@@ -1,12 +1,12 @@
 syntax="proto3";
 
-package org.jgroups.relay_server;
+package org.jgroups.upgrade_server;
 
 
 option java_multiple_files = true;
 
 
-service RelayService {
+service UpgradeService {
     rpc Connect (stream Request) returns (stream Response);
     rpc Leave (LeaveRequest)     returns (Void);
     rpc Dump (Void)              returns (DumpResponse);
@@ -25,7 +25,7 @@ message JoinRequest {
     Address address      = 2;
 }
 
-/** Used for graceful leaves. Ungraceful leaves (e.g. crashes) are detected by the RelayService directly  */
+/** Used for graceful leaves. Ungraceful leaves (e.g. crashes) are detected by the UpgradeService directly  */
 message LeaveRequest {
     string      cluster_name = 1;
     Address     leaver       = 2;
