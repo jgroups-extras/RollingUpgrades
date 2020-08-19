@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
  * @todo: implement support for addresses other than UUIDs
  * @todo: implement reconnection to server (server went down and then up again)
  */
-@MBean(description="Protocol that redirects all messages to/from a UpgradeServer")
+@MBean(description="Protocol that redirects all messages to/from an UpgradeServer")
 public class UPGRADE extends Protocol {
 
     @Property(description="Whether or not to perform relaying via the UpgradeServer",writable=false)
