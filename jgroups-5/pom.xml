@@ -9,14 +9,14 @@
       <relativePath>../pom.xml</relativePath>
    </parent>
 
-   <artifactId>jgroups-36</artifactId>
+   <artifactId>jgroups-5</artifactId>
    <packaging>jar</packaging>
-   <name>jgroups-36</name>
-   <description>Protocol for JGroups 3.6</description>
+   <name>jgroups-5</name>
+   <description>Protocol for JGroups 5.x</description>
 
-    <properties>
-        <version.jgroups>3.6.15.Final</version.jgroups>
-    </properties>
+   <properties>
+      <version.jgroups>5.0.2.Final</version.jgroups>
+   </properties>
 
    <dependencies>
       

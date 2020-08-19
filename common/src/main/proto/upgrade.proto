@@ -18,6 +18,7 @@ message Message {
     Address   sender       = 3;
     bytes     payload      = 4;
     RpcHeader rpc_header   = 5; // if the message is an RPC, otherwise this field will be null
+    Metadata  meta_data    = 6; // metadata (may be null)
 }
 
 message JoinRequest {
@@ -81,4 +82,8 @@ message RpcHeader {
     int32 type       = 1; // request, response, exception
     int64 request_id = 2;
     int32 corr_id    = 3;
+}
+
+message Metadata {
+    int32 msg_type = 1;
 }
