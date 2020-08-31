@@ -3,7 +3,7 @@
 
     <groupId>org.jgroups.rolling-upgrades</groupId>
     <artifactId>parent</artifactId>
-    <version>1.1.0.Final-SNAPSHOT</version>
+    <version>1.1.0.Final</version>
     <packaging>pom</packaging>
     <name>RollingUpgrades</name>
     <url>https://github.com/jgroups-extras/RollingUpgrades</url>
@@ -64,7 +64,7 @@
         <connection>scm:git:git@github.com:jgroups-extras/RollingUpgrades.git</connection>
         <developerConnection>scm:git:git@github.com:jgroups-extras/RollingUpgrades.git</developerConnection>
         <url>https://github.com/jgroups-extras/RollingUpgrades</url>
-        <tag>master</tag>
+        <tag>parent-1.1.0.Final</tag>
     </scm>
 
 
