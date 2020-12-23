@@ -11,8 +11,10 @@ import org.jgroups.annotations.MBean;
 import org.jgroups.annotations.ManagedAttribute;
 import org.jgroups.annotations.ManagedOperation;
 import org.jgroups.annotations.Property;
-import org.jgroups.upgrade_server.*;
+import org.jgroups.blocks.RequestCorrelator;
+import org.jgroups.conf.ClassConfigurator;
 import org.jgroups.stack.Protocol;
+import org.jgroups.upgrade_server.*;
 import org.jgroups.util.UUID;
 
 import java.util.ArrayList;
@@ -53,6 +55,8 @@ public class UPGRADE extends Protocol {
     protected UpgradeServiceGrpc.UpgradeServiceStub     asyncStub;
     protected StreamObserver<Request>                   send_stream; // for sending of messages and join requests
 
+    protected static final short                        REQ_ID=ClassConfigurator.getProtocolId(RequestCorrelator.class);
+
 
     @ManagedOperation(description="Enable forwarding and receiving of messages to/from the UpgradeServer")
     public synchronized void activate() {
@@ -91,6 +95,8 @@ public class UPGRADE extends Protocol {
                 // else send to UpgradeServer
                 if(send_stream != null) {
                     Message msg=(Message)evt.getArg();
+                    if(msg.getSrc() == null)
+                        msg.setSrc(local_addr);
                     Request req=Request.newBuilder().setMessage(jgroupsMessageToProtobufMessage(cluster, msg)).build();
                     send_stream.onNext(req);
                 }
@@ -196,7 +202,11 @@ public class UPGRADE extends Protocol {
 
         org.jgroups.upgrade_server.UUID pbuf_uuid=org.jgroups.upgrade_server.UUID.newBuilder()
           .setLeastSig(uuid.getLeastSignificantBits()).setMostSig(uuid.getMostSignificantBits()).build();
-        return org.jgroups.upgrade_server.Address.newBuilder().setUuid(pbuf_uuid).setName(name).build();
+        org.jgroups.upgrade_server.Address.Builder builder=org.jgroups.upgrade_server.Address.newBuilder()
+          .setUuid(pbuf_uuid);
+        if(name != null)
+            builder.setName(name);
+        return builder.build();
     }
 
     protected static Address protobufAddressToJGroupsAddress(org.jgroups.upgrade_server.Address pbuf_addr) {
@@ -211,6 +221,7 @@ public class UPGRADE extends Protocol {
             return null;
         Address destination=jgroups_msg.getDest(), sender=jgroups_msg.getSrc();
         byte[] payload=jgroups_msg.getBuffer();
+        RequestCorrelator.Header hdr=(RequestCorrelator.Header)jgroups_msg.getHeader(REQ_ID);
 
         org.jgroups.upgrade_server.Message.Builder msg_builder=org.jgroups.upgrade_server.Message.newBuilder()
           .setClusterName(cluster);
@@ -220,6 +231,10 @@ public class UPGRADE extends Protocol {
             msg_builder.setSender(jgroupsAddressToProtobufAddress(sender));
         if(payload != null)
             msg_builder.setPayload(ByteString.copyFrom(payload));
+        if(hdr != null) {
+            RpcHeader pbuf_hdr=jgroupsReqHeaderToProtobufRpcHeader(hdr);
+            msg_builder.setRpcHeader(pbuf_hdr);
+        }
         return msg_builder.build();
     }
 
@@ -232,6 +247,10 @@ public class UPGRADE extends Protocol {
         ByteString payload=msg.getPayload();
         if(!payload.isEmpty())
             jgroups_mgs.setBuffer(payload.toByteArray());
+        if(msg.hasRpcHeader()) {
+            RequestCorrelator.Header hdr=protobufRpcHeaderToJGroupsReqHeader(msg.getRpcHeader());
+            jgroups_mgs.putHeader(REQ_ID, hdr);
+        }
         return jgroups_mgs;
     }
 
@@ -244,6 +263,18 @@ public class UPGRADE extends Protocol {
         pbuf_mbrs.stream().map(UPGRADE::protobufAddressToJGroupsAddress).forEach(members::add);
         return new org.jgroups.View(jg_vid, members);
     }
+
+    protected static RpcHeader jgroupsReqHeaderToProtobufRpcHeader(RequestCorrelator.Header hdr) {
+        return RpcHeader.newBuilder().setType(hdr.type).setRequestId(hdr.req_id).setCorrId(hdr.corrId).build();
+    }
+
+    protected static RequestCorrelator.Header protobufRpcHeaderToJGroupsReqHeader(RpcHeader hdr) {
+        byte type=(byte)hdr.getType();
+        long request_id=hdr.getRequestId();
+        short corr_id=(short)hdr.getCorrId();
+        return (RequestCorrelator.Header)new RequestCorrelator.Header(type, request_id, corr_id).setProtId(REQ_ID);
+    }
+
 
     protected static String print(org.jgroups.upgrade_server.Message msg) {
         return String.format("cluster: %s sender: %s dest: %s %d bytes\n", msg.getClusterName(),
