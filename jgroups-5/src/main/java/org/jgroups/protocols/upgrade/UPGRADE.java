@@ -17,6 +17,7 @@ import org.jgroups.conf.ClassConfigurator;
 import org.jgroups.stack.Protocol;
 import org.jgroups.upgrade_server.*;
 import org.jgroups.util.*;
+import org.jgroups.util.UUID;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -228,7 +229,12 @@ public class UPGRADE extends Protocol {
         if(pbuf_addr == null)
             return null;
         org.jgroups.upgrade_server.UUID pbuf_uuid=pbuf_addr.hasUuid()? pbuf_addr.getUuid() : null;
-        return pbuf_uuid == null? null : new org.jgroups.util.UUID(pbuf_uuid.getMostSig(), pbuf_uuid.getLeastSig());
+
+        UUID uuid=pbuf_uuid == null? null : new UUID(pbuf_uuid.getMostSig(), pbuf_uuid.getLeastSig());
+        String logical_name=pbuf_addr.getName();
+        if(uuid != null && logical_name != null && !logical_name.isEmpty())
+            NameCache.add(uuid, logical_name);
+        return uuid;
     }
 
     protected static org.jgroups.upgrade_server.Message jgroupsMessageToProtobufMessage(String cluster, Message jg_msg) throws IOException {

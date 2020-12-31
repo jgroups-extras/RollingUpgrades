@@ -79,11 +79,12 @@ message DumpResponse {
 
 /** Header used for RPCs (RpcDispatcher / MessageDispatcher) */
 message RpcHeader {
-    int32 type       = 1; // request, response, exception
+    int32 type       = 1; // 0=request, 1=response, 2=exception
     int64 request_id = 2;
     int32 corr_id    = 3;
 }
 
 message Metadata {
     int32 msg_type = 1;
+    int32 version  = 2;
 }

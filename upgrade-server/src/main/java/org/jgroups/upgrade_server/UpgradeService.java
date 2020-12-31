@@ -205,7 +205,8 @@ public class UpgradeService extends UpgradeServiceGrpc.UpgradeServiceImplBase {
         try {
             StreamObserver<Response> obs=map.get(dest);
             if(obs == null) {
-                System.err.printf("unicast destination %s not found; dropping message\n", dest.getName());
+                System.err.printf("unicast destination %s (uuid: %s) not found; dropping message\n",
+                                  dest.getName(), dest.getUuid());
                 return;
             }
 

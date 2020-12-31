@@ -13,8 +13,8 @@ import org.jgroups.annotations.ManagedOperation;
 import org.jgroups.annotations.Property;
 import org.jgroups.blocks.RequestCorrelator;
 import org.jgroups.conf.ClassConfigurator;
-import org.jgroups.upgrade_server.*;
 import org.jgroups.stack.Protocol;
+import org.jgroups.upgrade_server.*;
 import org.jgroups.util.NameCache;
 import org.jgroups.util.UUID;
 
@@ -218,7 +218,12 @@ public class UPGRADE extends Protocol {
         if(pbuf_addr == null)
             return null;
         org.jgroups.upgrade_server.UUID pbuf_uuid=pbuf_addr.hasUuid()? pbuf_addr.getUuid() : null;
-        return pbuf_uuid == null? null : new UUID(pbuf_uuid.getMostSig(), pbuf_uuid.getLeastSig());
+
+        UUID uuid=pbuf_uuid == null? null : new UUID(pbuf_uuid.getMostSig(), pbuf_uuid.getLeastSig());
+        String logical_name=pbuf_addr.getName();
+        if(uuid != null && logical_name != null && !logical_name.isEmpty())
+            NameCache.add(uuid, logical_name);
+        return uuid;
     }
 
     protected static org.jgroups.upgrade_server.Message jgroupsMessageToProtobufMessage(String cluster, Message jgroups_msg) {
@@ -256,6 +261,12 @@ public class UPGRADE extends Protocol {
             RequestCorrelator.Header hdr=protobufRpcHeaderToJGroupsReqHeader(msg.getRpcHeader());
             jgroups_mgs.putHeader(REQ_ID, hdr);
         }
+
+        if(msg.hasMetaData()) {
+            Metadata metadata=msg.getMetaData();
+            //int version=metadata.getVersion();
+        }
+
         return jgroups_mgs;
     }
 
