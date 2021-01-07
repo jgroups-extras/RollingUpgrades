@@ -1,13 +1,10 @@
 package org.jgroups.demos;
 
 import org.jgroups.*;
-import org.jgroups.blocks.MessageDispatcher;
-import org.jgroups.blocks.RequestHandler;
-import org.jgroups.blocks.RequestOptions;
-import org.jgroups.util.ByteArrayDataInputStream;
-import org.jgroups.util.ByteArrayDataOutputStream;
-import org.jgroups.util.RspList;
-import org.jgroups.util.Util;
+import org.jgroups.blocks.*;
+import org.jgroups.common.ByteArray;
+import org.jgroups.common.Utils;
+import org.jgroups.util.*;
 
 /**
  * Tests RPCs across different JGroups versions
@@ -51,6 +48,7 @@ public class MessageDispatcherTest implements RequestHandler {
         ch=new JChannel(props);
         ch.setName(name);
         disp=new MessageDispatcher(ch, this);
+        disp.correlator().setMarshaller(new TestMarshaller());
 
         disp.setMembershipListener(new MembershipListener() {
             @Override public void viewAccepted(View new_view) {
@@ -66,7 +64,9 @@ public class MessageDispatcherTest implements RequestHandler {
         int count=1;
         while(true) {
             String str=Util.readStringFromStdin(": ");
-            if(str == null || str.isEmpty() || "exit".equals(str))
+            if(str == null || str.isEmpty())
+                str="";
+            if("exit".equals(str))
                 break;
 
             ByteArrayDataOutputStream out=new ByteArrayDataOutputStream();
@@ -84,5 +84,19 @@ public class MessageDispatcherTest implements RequestHandler {
                           MessageDispatcherTest.class.getSimpleName());
     }
 
+
+    protected static class TestMarshaller implements RpcDispatcher.Marshaller {
+
+        @Override
+        public Buffer objectToBuffer(Object obj) throws Exception {
+            ByteArray ret=Utils.Marshaller.objectToBuffer(obj);
+            return new Buffer(ret.getArray(), ret.getOffset(), ret.getLength());
+        }
+
+        @Override
+        public Object objectFromBuffer(byte[] buf, int offset, int length) throws Exception {
+            return Utils.Marshaller.objectFromBuffer(buf, offset, length);
+        }
+    }
 
 }

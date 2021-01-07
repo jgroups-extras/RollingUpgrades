@@ -1,0 +1,20 @@
+syntax="proto3";
+
+package org.jgroups.demos;
+
+import "google/protobuf/any.proto";
+
+
+option java_multiple_files = true;
+
+
+
+
+message Post {
+    string topic = 1; // e.g. "/quotes/ibm"
+    int32  value = 2;
+}
+
+message ResponseValue {
+    google.protobuf.Any details = 1;
+}

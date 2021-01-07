@@ -4,18 +4,20 @@ import com.google.protobuf.ByteString;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.stub.StreamObserver;
+import org.jgroups.*;
 import org.jgroups.Address;
-import org.jgroups.BytesMessage;
-import org.jgroups.Event;
 import org.jgroups.Message;
 import org.jgroups.annotations.MBean;
 import org.jgroups.annotations.ManagedAttribute;
 import org.jgroups.annotations.ManagedOperation;
 import org.jgroups.annotations.Property;
 import org.jgroups.blocks.RequestCorrelator;
+import org.jgroups.common.Utils;
 import org.jgroups.conf.ClassConfigurator;
 import org.jgroups.stack.Protocol;
 import org.jgroups.upgrade_server.*;
+import org.jgroups.upgrade_server.View;
+import org.jgroups.upgrade_server.ViewId;
 import org.jgroups.util.*;
 import org.jgroups.util.UUID;
 
@@ -112,12 +114,10 @@ public class UPGRADE extends Protocol {
     }
 
     public Object up(Event evt) {
-        switch(evt.type()) {
-            case Event.VIEW_CHANGE:
-                local_view=evt.arg();
-                if(active)
-                    return null;
-                break;
+        if(evt.type() == Event.VIEW_CHANGE) {
+            local_view=evt.arg();
+            if(active)
+                return null;
         }
         return up_prot.up(evt);
     }
@@ -135,7 +135,7 @@ public class UPGRADE extends Protocol {
                 req=Request.newBuilder().setMessage(jgroupsMessageToProtobufMessage(cluster, msg)).build();
                 send_stream.onNext(req);
             }
-            catch(IOException e) {
+            catch(Exception e) {
                 log.error("%s: failed sending message: %s", local_addr, e);
             }
         }
@@ -145,7 +145,7 @@ public class UPGRADE extends Protocol {
 
 
     protected synchronized void connect(String cluster) {
-        send_stream=asyncStub.connect(new StreamObserver<Response>() {
+        send_stream=asyncStub.connect(new StreamObserver<>() {
             public void onNext(Response rsp) {
                 if(rsp.hasMessage()) {
                     handleMessage(rsp.getMessage());
@@ -237,7 +237,7 @@ public class UPGRADE extends Protocol {
         return uuid;
     }
 
-    protected static org.jgroups.upgrade_server.Message jgroupsMessageToProtobufMessage(String cluster, Message jg_msg) throws IOException {
+    protected static org.jgroups.upgrade_server.Message jgroupsMessageToProtobufMessage(String cluster, Message jg_msg) throws Exception {
         if(jg_msg == null)
             return null;
         Address destination=jg_msg.getDest(), sender=jg_msg.getSrc();
@@ -259,12 +259,22 @@ public class UPGRADE extends Protocol {
             msg_builder.setDestination(jgroupsAddressToProtobufAddress(destination));
         if(sender != null)
             msg_builder.setSender(jgroupsAddressToProtobufAddress(sender));
-        if(payload != null)
-            msg_builder.setPayload(ByteString.copyFrom(payload.getBytes(), payload.getOffset(), payload.getLength()));
+
         if(hdr != null) {
             RpcHeader pbuf_hdr=jgroupsReqHeaderToProtobufRpcHeader(hdr);
             msg_builder.setRpcHeader(pbuf_hdr);
+
+            if(pbuf_hdr.getType() >= 1) { // RSP or RSP_EX
+                // read the object and marshal it in a version-independent format
+                Object rsp=jg_msg.getObject();
+                org.jgroups.common.ByteArray ba=Utils.Marshaller.objectToBuffer(rsp);
+                payload=new ByteArray(ba.getArray(), ba.getOffset(), ba.getLength());
+            }
         }
+
+        if(payload != null)
+            msg_builder.setPayload(ByteString.copyFrom(payload.getBytes(), payload.getOffset(), payload.getLength()));
+
         Metadata md=Metadata.newBuilder().setMsgType(jg_msg.getType()).build();
         msg_builder.setMetaData(md);
         return msg_builder.build();
@@ -298,8 +308,28 @@ public class UPGRADE extends Protocol {
             jg_msg.setSrc(protobufAddressToJGroupsAddress(msg.getSender()));
 
         if(msg.hasRpcHeader()) {
-            RequestCorrelator.Header hdr=protobufRpcHeaderToJGroupsReqHeader(msg.getRpcHeader());
+            RpcHeader pbuf_hdr=msg.getRpcHeader();
+            RequestCorrelator.Header hdr=protobufRpcHeaderToJGroupsReqHeader(pbuf_hdr);
             jg_msg.putHeader(REQ_ID, hdr);
+
+            if(pbuf_hdr.getType() >= 1) { // RSP or RSP_EX
+                try {
+                    // parse the version-independent format and create an ObjectMessage
+                    Object obj=Utils.Marshaller.objectFromBuffer(jg_msg.getArray(), jg_msg.getOffset(), jg_msg.getLength());
+
+                    // convert the BytesMessage to an ObjectMessage
+                    short flags=jg_msg.getFlags(false), transient_flags=jg_msg.getFlags(true);
+                    ObjectMessage obj_msg=(ObjectMessage)new ObjectMessage(jg_msg.getDest(), obj)
+                      .setSrc(jg_msg.getSrc())
+                      .setFlag(flags, false).setFlag(transient_flags, true);
+                    jg_msg.getHeaders().forEach(obj_msg::putHeader);
+                    return obj_msg;
+                }
+                catch(Exception e) {
+                    e.printStackTrace();
+                }
+            }
+
         }
         return jg_msg;
     }

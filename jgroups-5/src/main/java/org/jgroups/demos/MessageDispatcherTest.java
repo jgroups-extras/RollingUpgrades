@@ -68,18 +68,6 @@ public class MessageDispatcherTest implements RequestHandler {
             Message msg=new BytesMessage(null, out.getBuffer());
             RspList<Integer> rsps=disp.castMessage(null, msg, RequestOptions.SYNC());
             System.out.printf("rsps: %s\n", rsps);
-
-            /*for(Rsp<Integer> rsp: rsps) {
-                Object obj=rsp.getValue();
-                if(obj instanceof byte[]) {
-                    byte[] buf=(byte[])obj;
-                    buf[0]=11;
-                    Object object=Util.objectFromByteBuffer(buf);
-                    System.out.printf("value: %s\n", object);
-                }
-                // Integer val=rsp.getValue();
-            }
-*/
         }
         Util.close(disp, ch);
     }
