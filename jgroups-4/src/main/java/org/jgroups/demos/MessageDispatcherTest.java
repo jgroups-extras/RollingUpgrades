@@ -5,15 +5,16 @@ import org.jgroups.blocks.Marshaller;
 import org.jgroups.blocks.MessageDispatcher;
 import org.jgroups.blocks.RequestHandler;
 import org.jgroups.blocks.RequestOptions;
-import org.jgroups.common.Utils;
-import org.jgroups.util.ByteArrayDataInputStream;
-import org.jgroups.util.ByteArrayDataOutputStream;
+import org.jgroups.common.InputStreamAdapter;
+import org.jgroups.common.OutputStreamAdapter;
+import org.jgroups.util.Buffer;
 import org.jgroups.util.RspList;
 import org.jgroups.util.Util;
 
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.stream.Collectors;
 
 /**
  * Tests RPCs across different JGroups versions
@@ -45,11 +46,11 @@ public class MessageDispatcherTest implements RequestHandler {
 
     @Override
     public Object handle(Message msg) throws Exception {
-        ByteArrayDataInputStream in=new ByteArrayDataInputStream(msg.getRawBuffer(), msg.getOffset(), msg.getLength());
-        String message=in.readUTF();
-        int count=in.readInt();
-        System.out.printf("received %s, returning %d\n", message, count+1);
-        return count+1;
+        byte[] buf=msg.getBuffer();
+        DemoRequest req=DemoRequest.parseFrom(buf);
+        int count=req.getCount()+1;
+        System.out.printf("received %s, returning %d\n", req.getName(), count);
+        return count;
     }
 
 
@@ -74,14 +75,22 @@ public class MessageDispatcherTest implements RequestHandler {
         int count=1;
         while(true) {
             String str=Util.readStringFromStdin(": ");
-            if(str == null || str.isEmpty() || "exit".equals(str))
+            if(str == null || str.isEmpty())
+                str="";
+            if("exit".equals(str))
                 break;
 
-            ByteArrayDataOutputStream out=new ByteArrayDataOutputStream();
-            out.writeUTF(String.format("%s from %s", str, ch.getAddress()));
-            out.writeInt(count++);
-            RspList<Integer> rsps=disp.castMessage(null, out.getBuffer(), RequestOptions.SYNC());
-            System.out.printf("rsps: %s\n", rsps);
+            DemoRequest req=DemoRequest.newBuilder()
+              .setName(String.format("%s from %s", str, ch.getAddress()))
+              .setCount(count++)
+              .build();
+            byte[] buf=req.toByteArray();
+            Buffer b=new Buffer(buf, 0, buf.length);
+            RspList<DemoResponse> rsps=disp.castMessage(null, b, RequestOptions.SYNC());
+            System.out.printf("rsps:\n%s\n", rsps.entrySet().stream()
+              .filter(e -> e.getKey() != null && e.getValue() != null)
+              .map(e -> String.format("%s: %s", e.getKey(), e.getValue().getValue().getCount()))
+              .collect(Collectors.joining("\n")));
         }
         Util.close(disp, ch);
     }
@@ -97,12 +106,15 @@ public class MessageDispatcherTest implements RequestHandler {
 
         @Override
         public void objectToStream(Object obj, DataOutput out) throws IOException {
-            Utils.Marshaller.objectToStream(obj, out);
+            DemoResponse rsp=DemoResponse.newBuilder().setCount((Integer)obj).build();
+            rsp.writeTo(new OutputStreamAdapter(out));
+           //  Utils.Marshaller.objectToStream(obj, out);
         }
 
         @Override
         public Object objectFromStream(DataInput in) throws IOException, ClassNotFoundException {
-            return Utils.Marshaller.objectFromStream(in);
+            // return Utils.Marshaller.objectFromStream(in);
+            return DemoResponse.parseFrom(new InputStreamAdapter(in));
         }
     }
 
