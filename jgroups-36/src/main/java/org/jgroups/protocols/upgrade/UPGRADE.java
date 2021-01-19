@@ -292,7 +292,7 @@ public class UPGRADE extends Protocol {
 
             Address[] exclusions = mdhdr.exclusion_list;
             if (exclusions != null && exclusions.length > 0) {
-                rpcHeader.addAllExclusionList(Arrays.asList(exclusions).stream().map(UPGRADE::jgroupsAddressToProtobufAddress).collect(Collectors.toList()));
+                rpcHeader.addAllExclusionList(Arrays.stream(exclusions).map(UPGRADE::jgroupsAddressToProtobufAddress).collect(Collectors.toList()));
             }
         }
 
