@@ -133,7 +133,11 @@ public class UPGRADE extends Protocol {
             Request req=null;
             try {
                 req=Request.newBuilder().setMessage(jgroupsMessageToProtobufMessage(cluster, msg)).build();
-                send_stream.onNext(req);
+                synchronized (send_stream) {
+                    // Per javadoc, StreamObserver is not thread-safe and calls onNext()
+                    // must be handled by the application
+                    send_stream.onNext(req);
+                }
             }
             catch(Exception e) {
                 log.error("%s: failed sending message: %s", local_addr, e);

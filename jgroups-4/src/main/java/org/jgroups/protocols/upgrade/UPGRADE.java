@@ -132,7 +132,11 @@ public class UPGRADE extends Protocol {
             if(msg.getSrc() == null)
                 msg.setSrc(local_addr);
             Request req=Request.newBuilder().setMessage(jgroupsMessageToProtobufMessage(cluster, msg)).build();
-            send_stream.onNext(req);
+            synchronized (send_stream) {
+                // Per javadoc, StreamObserver is not thread-safe and calls onNext()
+                // must be handled by the application
+                send_stream.onNext(req);
+            }
         }
         return null;
     }
