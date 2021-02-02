@@ -15,7 +15,7 @@
    <description>Protocol for JGroups 4.x</description>
 
    <properties>
-      <version.jgroups>4.2.5.Final</version.jgroups>
+      <version.jgroups>4.2.11.Final</version.jgroups>
    </properties>
 
    <dependencies>

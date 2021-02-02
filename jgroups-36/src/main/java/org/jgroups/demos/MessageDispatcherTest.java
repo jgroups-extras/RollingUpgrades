@@ -83,7 +83,7 @@ public class MessageDispatcherTest implements RequestHandler {
             Message msg=new Message(null, buf);
             RspList<DemoResponse> rsps=disp.castMessage(null, msg, RequestOptions.SYNC());
             System.out.printf("rsps:\n%s\n", rsps.entrySet().stream()
-              .filter(e -> e.getKey() != null && e.getValue() != null)
+              .filter(e -> e.getKey() != null && e.getValue() != null && e.getValue().getValue() != null)
               .map(e -> String.format("%s: %s", e.getKey(), e.getValue().getValue().getCount()))
               .collect(Collectors.joining("\n")));
         }

@@ -5,8 +5,8 @@ import org.jgroups.blocks.Marshaller;
 import org.jgroups.blocks.MessageDispatcher;
 import org.jgroups.blocks.RequestHandler;
 import org.jgroups.blocks.RequestOptions;
-import org.jgroups.common.InputStreamAdapter;
-import org.jgroups.common.OutputStreamAdapter;
+import org.jgroups.util.InputStreamAdapter;
+import org.jgroups.util.OutputStreamAdapter;
 import org.jgroups.util.Buffer;
 import org.jgroups.util.RspList;
 import org.jgroups.util.Util;
@@ -108,12 +108,10 @@ public class MessageDispatcherTest implements RequestHandler {
         public void objectToStream(Object obj, DataOutput out) throws IOException {
             DemoResponse rsp=DemoResponse.newBuilder().setCount((Integer)obj).build();
             rsp.writeTo(new OutputStreamAdapter(out));
-           //  Utils.Marshaller.objectToStream(obj, out);
         }
 
         @Override
         public Object objectFromStream(DataInput in) throws IOException, ClassNotFoundException {
-            // return Utils.Marshaller.objectFromStream(in);
             return DemoResponse.parseFrom(new InputStreamAdapter(in));
         }
     }

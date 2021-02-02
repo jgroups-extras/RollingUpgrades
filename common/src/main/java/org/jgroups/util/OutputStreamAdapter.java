@@ -1,4 +1,4 @@
-package org.jgroups.common;
+package org.jgroups.util;
 
 import java.io.DataOutput;
 import java.io.IOException;

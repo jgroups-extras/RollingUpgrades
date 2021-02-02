@@ -4,22 +4,22 @@ import com.google.protobuf.ByteString;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.stub.StreamObserver;
-import org.jgroups.*;
 import org.jgroups.Address;
 import org.jgroups.Message;
+import org.jgroups.*;
 import org.jgroups.annotations.MBean;
 import org.jgroups.annotations.ManagedAttribute;
 import org.jgroups.annotations.ManagedOperation;
 import org.jgroups.annotations.Property;
 import org.jgroups.blocks.RequestCorrelator;
-import org.jgroups.common.Utils;
+import org.jgroups.common.Marshaller;
 import org.jgroups.conf.ClassConfigurator;
 import org.jgroups.stack.Protocol;
-import org.jgroups.upgrade_server.*;
 import org.jgroups.upgrade_server.View;
 import org.jgroups.upgrade_server.ViewId;
-import org.jgroups.util.*;
+import org.jgroups.upgrade_server.*;
 import org.jgroups.util.UUID;
+import org.jgroups.util.*;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -59,9 +59,16 @@ public class UPGRADE extends Protocol {
     protected ManagedChannel                            channel;
     protected UpgradeServiceGrpc.UpgradeServiceStub     asyncStub;
     protected StreamObserver<Request>                   send_stream; // for sending of messages and join requests
+    protected org.jgroups.common.Marshaller             marshaller;
 
     protected static final short                        REQ_ID=ClassConfigurator.getProtocolId(RequestCorrelator.class);
 
+    public Marshaller marshaller()             {return marshaller;}
+    public UPGRADE    marshaller(Marshaller m) {this.marshaller=m; return this;}
+
+    @ManagedAttribute public String getMarshaller() {
+        return marshaller != null? marshaller.getClass().getSimpleName() : "n/a";
+    }
 
     @ManagedOperation(description="Enable forwarding and receiving of messages to/from the UpgradeServer")
     public synchronized void activate() {
@@ -241,7 +248,7 @@ public class UPGRADE extends Protocol {
         return uuid;
     }
 
-    protected static org.jgroups.upgrade_server.Message jgroupsMessageToProtobufMessage(String cluster, Message jg_msg) throws Exception {
+    protected org.jgroups.upgrade_server.Message jgroupsMessageToProtobufMessage(String cluster, Message jg_msg) throws Exception {
         if(jg_msg == null)
             return null;
         Address destination=jg_msg.getDest(), sender=jg_msg.getSrc();
@@ -271,8 +278,12 @@ public class UPGRADE extends Protocol {
             if(pbuf_hdr.getType() >= 1) { // RSP or RSP_EX
                 // read the object and marshal it in a version-independent format
                 Object rsp=jg_msg.getObject();
-                org.jgroups.common.ByteArray ba=Utils.Marshaller.objectToBuffer(rsp);
-                payload=new ByteArray(ba.getArray(), ba.getOffset(), ba.getLength());
+                if(marshaller != null)
+                    payload=marshaller.objectToBuffer(rsp);
+                else {
+                    org.jgroups.util.ByteArray ba=Utils.Marshaller.objectToBuffer(rsp);
+                    payload=new ByteArray(ba.getArray(), ba.getOffset(), ba.getLength());
+                }
             }
         }
 
@@ -292,12 +303,7 @@ public class UPGRADE extends Protocol {
             jg_msg=getTransport().getMessageFactory().create((short)type);
             if(!payload.isEmpty()) {
                 byte[] tmp=payload.toByteArray();
-                if(jg_msg.hasArray())
-                    jg_msg.setArray(tmp);
-                else {
-                    ByteArrayDataInputStream in=new ByteArrayDataInputStream(tmp);
-                    jg_msg.readPayload(in);
-                }
+                jg_msg.setArray(tmp);
             }
         }
         else {
@@ -318,8 +324,12 @@ public class UPGRADE extends Protocol {
 
             if(pbuf_hdr.getType() >= 1) { // RSP or RSP_EX
                 try {
+                    Object obj=null;
                     // parse the version-independent format and create an ObjectMessage
-                    Object obj=Utils.Marshaller.objectFromBuffer(jg_msg.getArray(), jg_msg.getOffset(), jg_msg.getLength());
+                    if(marshaller != null)
+                        obj=marshaller.objectFromBuffer(jg_msg.getArray(), jg_msg.getOffset(), jg_msg.getLength());
+                    else
+                        obj=Utils.Marshaller.objectFromBuffer(jg_msg.getArray(), jg_msg.getOffset(), jg_msg.getLength());
 
                     // convert the BytesMessage to an ObjectMessage
                     short flags=jg_msg.getFlags(false), transient_flags=jg_msg.getFlags(true);
