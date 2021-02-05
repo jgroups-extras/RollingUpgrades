@@ -20,6 +20,8 @@ import org.jgroups.util.UUID;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 /**
@@ -55,7 +57,7 @@ public class UPGRADE extends Protocol {
     protected ManagedChannel                            channel;
     protected UpgradeServiceGrpc.UpgradeServiceStub     asyncStub;
     protected StreamObserver<Request>                   send_stream; // for sending of messages and join requests
-
+    protected final Lock                                send_stream_lock=new ReentrantLock();
     protected static final short                        REQ_ID=ClassConfigurator.getProtocolId(RequestCorrelator.class);
 
 
@@ -132,10 +134,14 @@ public class UPGRADE extends Protocol {
             if(msg.getSrc() == null)
                 msg.setSrc(local_addr);
             Request req=Request.newBuilder().setMessage(jgroupsMessageToProtobufMessage(cluster, msg)).build();
-            synchronized (send_stream) {
+            send_stream_lock.lock();
+            try {
                 // Per javadoc, StreamObserver is not thread-safe and calls onNext()
                 // must be handled by the application
                 send_stream.onNext(req);
+            }
+            finally {
+                send_stream_lock.unlock();
             }
         }
         return null;
