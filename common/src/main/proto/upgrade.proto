@@ -81,12 +81,19 @@ message DumpResponse {
 
 /** Header used for RPCs (RpcDispatcher / MessageDispatcher) */
 message RpcHeader {
-    int32 type       = 1; // 0=request, 1=response, 2=exception
-    int64 request_id = 2;
-    int32 corr_id    = 3;
+    int32            type           = 1; // 0=request, 1=response, 2=exception
+    int64            request_id     = 2;
+    int32            corr_id        = 3;
+    repeated Address exclusion_list = 4;
 }
 
 message Metadata {
     int32 msg_type = 1;
     int32 version  = 2;
+}
+
+/** Represent a method call used by RPCs (payload of a message) */
+message MethodCall {
+    int32 id                               = 1; // the ID of the method.
+    repeated google.protobuf.Any arguments = 2;
 }
