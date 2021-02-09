@@ -179,7 +179,7 @@ public class UpgradeService extends UpgradeServiceGrpc.UpgradeServiceImplBase {
         lock.lock();
         try {
             if(!map.isEmpty()) {
-                System.out.printf("-- relaying msg to %d members for cluster %s\n", map.size(), msg.getClusterName());
+                // System.out.printf("-- relaying msg to %d members for cluster %s\n", map.size(), msg.getClusterName());
                 Response response=Response.newBuilder().setMessage(msg).build();
 
                 // need to honor the exclusion list in the header if present
