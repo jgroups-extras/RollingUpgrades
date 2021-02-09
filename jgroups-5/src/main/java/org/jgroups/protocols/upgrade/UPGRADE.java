@@ -23,7 +23,9 @@ import org.jgroups.util.*;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
@@ -98,8 +100,12 @@ public class UPGRADE extends Protocol {
     public void stop() {
         super.stop();
         channel.shutdown();
+        try {
+            channel.awaitTermination(30, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            // Ignore
+        }
     }
-
 
     public Object down(Event evt) {
         switch(evt.type()) {
@@ -366,7 +372,18 @@ public class UPGRADE extends Protocol {
     }
 
     protected static RpcHeader jgroupsReqHeaderToProtobufRpcHeader(RequestCorrelator.Header hdr) {
-        return RpcHeader.newBuilder().setType(hdr.type).setRequestId(hdr.req_id).setCorrId(hdr.corrId).build();
+        RpcHeader.Builder builder = RpcHeader.newBuilder().setType(hdr.type).setRequestId(hdr.req_id).setCorrId(hdr.corrId);
+
+        if (hdr instanceof RequestCorrelator.MultiDestinationHeader) {
+            RequestCorrelator.MultiDestinationHeader mdhdr = (RequestCorrelator.MultiDestinationHeader) hdr;
+
+            Address[] exclusions = mdhdr.exclusion_list;
+            if (exclusions != null && exclusions.length > 0) {
+                builder.addAllExclusionList(Arrays.stream(exclusions).map(UPGRADE::jgroupsAddressToProtobufAddress).collect(Collectors.toList()));
+            }
+        }
+
+        return builder.build();
     }
 
     protected static RequestCorrelator.Header protobufRpcHeaderToJGroupsReqHeader(RpcHeader hdr) {
