@@ -146,7 +146,25 @@ to all cluster members, which de-activate `UPGRADE` (or even remove it from the 
 * The UpgradeServer pod can now safely be killed.
 
 
+=== Demos
+The demos show how programs run in different versions of JGroups can join the same cluster and
+exchange (and understand) each others' messages. Apart from a simple string-based message payload (JChannelTest), protobuf is used to translate the different payloads into a common format that is understood by all.
+
+== JChannelTest
+This demo sends a simple string around. The string's bytes are retrieved and injected into the message
+as a byte array. The receiving side fetches the byte array and creates a string from it. Because strings are
+(de-)serialized the same way across versions, this works for sending messages between different versions and also
+across different Java versions.
+
+
+== MessageDispatcherTest
+
+
+== RpcDispatcherTest
+
 
 === Misc
 * In a first stage, only addresses of type UUID are implemented
 * Application headers are currently not supported (perhaps they never will)
+
+
