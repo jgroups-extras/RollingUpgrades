@@ -1,7 +1,5 @@
 package org.jgroups.common;
 
-import org.jgroups.util.ByteArray;
-
 /**
  * @author Bela Ban
  * @since  1.1.1
