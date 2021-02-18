@@ -88,8 +88,8 @@ message RpcHeader {
 }
 
 message Metadata {
-    int32 msg_type = 1;
-    int32 version  = 2;
+    int32 msg_type  = 1;
+    int32 version   = 2;
 }
 
 /** Represent a method call used by RPCs (payload of a message) */
