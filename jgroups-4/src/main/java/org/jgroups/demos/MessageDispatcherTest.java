@@ -5,9 +5,9 @@ import org.jgroups.blocks.Marshaller;
 import org.jgroups.blocks.MessageDispatcher;
 import org.jgroups.blocks.RequestHandler;
 import org.jgroups.blocks.RequestOptions;
-import org.jgroups.util.InputStreamAdapter;
-import org.jgroups.util.OutputStreamAdapter;
-import org.jgroups.util.Buffer;
+import org.jgroups.common.InputStreamAdapter;
+import org.jgroups.common.OutputStreamAdapter;
+import org.jgroups.common.Utils;
 import org.jgroups.util.RspList;
 import org.jgroups.util.Util;
 
@@ -46,11 +46,10 @@ public class MessageDispatcherTest implements RequestHandler {
 
     @Override
     public Object handle(Message msg) throws Exception {
-        byte[] buf=msg.getBuffer();
-        DemoRequest req=DemoRequest.parseFrom(buf);
+        DemoRequest req=Utils.pbFromByteArray(msg.getRawBuffer(), msg.getOffset(), msg.getLength());
         int count=req.getCount()+1;
         System.out.printf("received %s, returning %d\n", req.getName(), count);
-        return count;
+        return DemoResponse.newBuilder().setCount(count).build();
     }
 
 
@@ -82,13 +81,11 @@ public class MessageDispatcherTest implements RequestHandler {
 
             DemoRequest req=DemoRequest.newBuilder()
               .setName(String.format("%s from %s", str, ch.getAddress()))
-              .setCount(count++)
-              .build();
-            byte[] buf=req.toByteArray();
-            Buffer b=new Buffer(buf, 0, buf.length);
-            RspList<DemoResponse> rsps=disp.castMessage(null, b, RequestOptions.SYNC());
+              .setCount(count++).build();
+            byte[] buf=Utils.pbToByteArray(req);
+            RspList<DemoResponse> rsps=disp.castMessage(null, buf, 0, buf.length, RequestOptions.SYNC());
             System.out.printf("rsps:\n%s\n", rsps.entrySet().stream()
-              .filter(e -> e.getKey() != null && e.getValue() != null)
+              .filter(e -> e.getKey() != null && e.getValue() != null && e.getValue().getValue() != null)
               .map(e -> String.format("%s: %s", e.getKey(), e.getValue().getValue().getCount()))
               .collect(Collectors.joining("\n")));
         }
@@ -106,13 +103,17 @@ public class MessageDispatcherTest implements RequestHandler {
 
         @Override
         public void objectToStream(Object obj, DataOutput out) throws IOException {
-            DemoResponse rsp=DemoResponse.newBuilder().setCount((Integer)obj).build();
-            rsp.writeTo(new OutputStreamAdapter(out));
+            Utils.pbToStream(obj, new OutputStreamAdapter(out));
         }
 
         @Override
-        public Object objectFromStream(DataInput in) throws IOException, ClassNotFoundException {
-            return DemoResponse.parseFrom(new InputStreamAdapter(in));
+        public Object objectFromStream(DataInput in) {
+            try {
+                return Utils.pbFromStream(new InputStreamAdapter(in));
+            }
+            catch(Exception e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 

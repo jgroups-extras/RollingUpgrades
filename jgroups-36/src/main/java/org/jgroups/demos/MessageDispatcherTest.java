@@ -5,11 +5,11 @@ import org.jgroups.blocks.MessageDispatcher;
 import org.jgroups.blocks.RequestHandler;
 import org.jgroups.blocks.RequestOptions;
 import org.jgroups.blocks.RpcDispatcher;
+import org.jgroups.common.Utils;
 import org.jgroups.util.Buffer;
 import org.jgroups.util.RspList;
 import org.jgroups.util.Util;
 
-import java.nio.ByteBuffer;
 import java.util.stream.Collectors;
 
 /**
@@ -42,11 +42,10 @@ public class MessageDispatcherTest implements RequestHandler {
 
     @Override
     public Object handle(Message msg) throws Exception {
-        byte[] buf=msg.getBuffer();
-        DemoRequest req=DemoRequest.parseFrom(buf);
+        DemoRequest req=Utils.pbFromByteArray(msg.getRawBuffer(), msg.getOffset(), msg.getLength());
         int count=req.getCount()+1;
         System.out.printf("received %s, returning %d\n", req.getName(), count);
-        return count;
+        return DemoResponse.newBuilder().setCount(count).build();
     }
 
 
@@ -79,7 +78,7 @@ public class MessageDispatcherTest implements RequestHandler {
               .setName(String.format("%s from %s", str, ch.getAddress()))
               .setCount(count++)
               .build();
-            byte[] buf=req.toByteArray();
+            byte[] buf=Utils.pbToByteArray(req);
             Message msg=new Message(null, buf);
             RspList<DemoResponse> rsps=disp.castMessage(null, msg, RequestOptions.SYNC());
             System.out.printf("rsps:\n%s\n", rsps.entrySet().stream()
@@ -100,19 +99,16 @@ public class MessageDispatcherTest implements RequestHandler {
 
         @Override
         public Buffer objectToBuffer(Object obj) throws Exception {
-            // DemoResponse rsp=DemoResponse.newBuilder().setCount((Integer)obj).build();
-            DemoResponse rsp=DemoResponse.newBuilder().setCount((Integer)obj).build();
-            byte[] buf=rsp.toByteArray();
-            return new Buffer(buf);
-
-            //ByteArray ret=Utils.Marshaller.objectToBuffer(obj);
-            //return new Buffer(ret.getArray(), ret.getOffset(), ret.getLength());
+            // should be a response
+            byte[] b=Utils.pbToByteArray(obj);
+            if(b != null)
+                return new Buffer(b);
+            throw new IllegalArgumentException(String.format("response %s not handled", obj));
         }
 
         @Override
         public Object objectFromBuffer(byte[] buf, int offset, int length) throws Exception {
-            return DemoResponse.parseFrom(ByteBuffer.wrap(buf, offset, length));
-            // return Utils.Marshaller.objectFromBuffer(buf, offset, length);
+            return Utils.pbFromByteArray(buf, offset, length);
         }
     }
 

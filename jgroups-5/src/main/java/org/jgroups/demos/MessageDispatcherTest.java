@@ -4,15 +4,13 @@ import org.jgroups.*;
 import org.jgroups.blocks.MessageDispatcher;
 import org.jgroups.blocks.RequestHandler;
 import org.jgroups.blocks.RequestOptions;
-import org.jgroups.common.Marshaller;
 import org.jgroups.logging.Log;
 import org.jgroups.logging.LogFactory;
 import org.jgroups.protocols.upgrade.UPGRADE;
-import org.jgroups.util.ByteArray;
 import org.jgroups.util.RspList;
 import org.jgroups.util.Util;
+import org.jgroups.common.Utils;
 
-import java.util.Arrays;
 import java.util.stream.Collectors;
 
 /**
@@ -46,11 +44,10 @@ public class MessageDispatcherTest implements RequestHandler {
 
     @Override
     public Object handle(Message msg) throws Exception {
-        byte[] buf=msg.getArray();
-        DemoRequest req=DemoRequest.parseFrom(buf);
+        DemoRequest req=Utils.pbFromByteArray(msg.getArray(), msg.getOffset(), msg.getLength());
         int count=req.getCount()+1;
         System.out.printf("received %s, returning %d\n", req.getName(), count);
-        return count;
+        return DemoResponse.newBuilder().setCount(count).build();
     }
 
 
@@ -75,11 +72,9 @@ public class MessageDispatcherTest implements RequestHandler {
                 break;
             DemoRequest req=DemoRequest.newBuilder()
               .setName(String.format("%s from %s", str, ch.getAddress()))
-              .setCount(count++)
-              .build();
-            byte[] buf=req.toByteArray();
-            ByteArray b=new ByteArray(buf, 0, buf.length);
-            Message msg=new BytesMessage(null, b);
+              .setCount(count++).build();
+            byte[] buf=Utils.pbToByteArray(req);
+            Message msg=new BytesMessage(null, buf);
             RspList<DemoResponse> rsps=disp.castMessage(null, msg, RequestOptions.SYNC());
             System.out.printf("rsps:\n%s\n", rsps.entrySet().stream()
               .filter(e -> e.getKey() != null && e.getValue() != null && e.getValue().getValue() != null)
@@ -97,25 +92,9 @@ public class MessageDispatcherTest implements RequestHandler {
     protected static void setMarshaller(JChannel ch) {
         UPGRADE upgrade=ch.getProtocolStack().findProtocol(UPGRADE.class);
         if(upgrade != null)
-            upgrade.marshaller(new TestMarshaller());
+            upgrade.marshaller(new DemoMarshaller());
         else
             log.warn("%s not found", UPGRADE.class.getSimpleName());
-    }
-
-
-    protected static class TestMarshaller implements Marshaller {
-
-        @Override
-        public ByteArray objectToBuffer(Object obj) throws Exception {
-            DemoResponse rsp=DemoResponse.newBuilder().setCount((Integer)obj).build();
-            return new ByteArray(rsp.toByteArray());
-        }
-
-        @Override
-        public Object objectFromBuffer(byte[] buf, int offset, int length) throws Exception {
-            byte[] ba=offset == 0 && length == buf.length? buf : Arrays.copyOfRange(buf, offset, offset+length);
-            return DemoResponse.parseFrom(ba);
-        }
     }
 
 
