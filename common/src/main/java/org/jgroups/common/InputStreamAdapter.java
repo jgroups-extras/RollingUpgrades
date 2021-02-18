@@ -1,4 +1,4 @@
-package org.jgroups.util;
+package org.jgroups.common;
 
 import java.io.DataInput;
 import java.io.EOFException;

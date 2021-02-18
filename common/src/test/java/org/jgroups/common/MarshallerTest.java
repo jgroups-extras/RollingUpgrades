@@ -1,4 +1,4 @@
-package org.jgroups.util;
+package org.jgroups.common;
 
 import org.jgroups.demos.DemoResponse;
 import org.testng.annotations.Test;

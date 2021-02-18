@@ -1,8 +1,13 @@
-package org.jgroups.util;
+package org.jgroups.common;
 
-import java.io.DataInput;
-import java.io.DataOutput;
-import java.io.IOException;
+import com.google.protobuf.Any;
+import com.google.protobuf.Int32Value;
+import com.google.protobuf.StringValue;
+import org.jgroups.demos.DemoRequest;
+import org.jgroups.demos.DemoResponse;
+
+import java.io.*;
+import java.nio.ByteBuffer;
 
 /**
  * Misc utility methods, e.g. for marshalling and unmarshalling
@@ -50,6 +55,59 @@ public class Utils {
           ((buf[offset+1] & 0xFF) << 16) +
           ((buf[offset]) << 24);
     }
+
+    public static byte[] pbToByteArray(Object obj) {
+        Any any=objToAny(obj);
+        return any != null? any.toByteArray() : null;
+    }
+
+    public static <T extends Object> T pbFromByteArray(byte[] ba, int offset, int length) throws Exception {
+        Any any=Any.parseFrom(ByteBuffer.wrap(ba, offset, length));
+        return anyToObject(any);
+    }
+
+    public static void pbToStream(Object obj, OutputStream out) throws IOException {
+        Any any=objToAny(obj);
+        if(any != null)
+            any.writeTo(out);
+        else
+            throw new IllegalArgumentException(String.format("serialization of %s not supported", obj));
+    }
+
+    public static <T extends Object> T pbFromStream(InputStream in) throws Exception {
+        Any any=Any.parseFrom(in);
+        return anyToObject(any);
+    }
+
+
+    protected static <T extends Object> T objToAny(Object obj) {
+        if(obj instanceof DemoRequest)
+            return (T)Any.pack((DemoRequest)obj);
+        if(obj instanceof DemoResponse)
+            return (T)Any.pack((DemoResponse)obj);
+        if(obj instanceof Integer) {
+            Int32Value val=Int32Value.newBuilder().setValue((Integer)obj).build();
+            return (T)Any.pack(val);
+        }
+        if(obj instanceof String) {
+            StringValue val=StringValue.newBuilder().setValue((String)obj).build();
+            return (T)Any.pack(val);
+        }
+        return null;
+    }
+
+    protected static <T extends Object> T anyToObject(Any any) throws Exception {
+        if(any.is(DemoRequest.class))
+            return (T)any.unpack(DemoRequest.class);
+        if(any.is(DemoResponse.class))
+            return (T)any.unpack(DemoResponse.class);
+        if(any.is(Int32Value.class))
+            return (T)Integer.valueOf(any.unpack(Int32Value.class).getValue());
+        if(any.is(StringValue.class))
+            return (T)any.unpack(StringValue.class).getValue();
+        return null;
+    }
+
 
     /** A JGroups version-independent marshaller for 3.6 and 4.x. Currently only supports a limited number of types,
      * will be replaced by protobuf soon */
