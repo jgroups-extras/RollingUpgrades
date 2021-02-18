@@ -1,4 +1,4 @@
-package org.jgroups.util;
+package org.jgroups.common;
 
 /**
  * Byte array with an offset and length. This class is immutable.<br/>
