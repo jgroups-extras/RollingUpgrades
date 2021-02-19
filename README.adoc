@@ -148,7 +148,8 @@ to all cluster members, which de-activate `UPGRADE` (or even remove it from the 
 
 === Demos
 The demos show how programs run in different versions of JGroups can join the same cluster and
-exchange (and understand) each others' messages. Apart from a simple string-based message payload (JChannelTest), protobuf is used to translate the different payloads into a common format that is understood by all.
+exchange (and understand) each others' messages. Apart from a simple string-based message payload (JChannelTest),
+protobuf is used to translate the different payloads into a common format that is understood by all.
 
 == JChannelTest
 This demo sends a simple string around. The string's bytes are retrieved and injected into the message
@@ -158,6 +159,15 @@ across different Java versions.
 
 
 == MessageDispatcherTest
+This test calls `MessageDispatcher.castMessage()` to invoke `handle()` in all cluster members. The argument to the
+request is `DemoRequest` and the response is `DemoResponse`; both are protobuf types.
+
+The request is serialized by application code (MessageDispatcherTest) and also deserialized (in `handle()`). The response
+is (de-)serialized by the Marshaller set by MessageDispatcherTest (in 3 and 4) and by `UPGRADE` in 5 (which doesn't have
+Marshaller anymore).
+
+By using the protobuf types DemoRequest and DemoResponse, common to all versions, the different MessageDispatcher nodes
+can talk to each other.
 
 
 == RpcDispatcherTest
