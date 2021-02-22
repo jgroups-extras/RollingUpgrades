@@ -80,7 +80,7 @@ public class Utils {
     }
 
 
-    protected static <T extends Object> T objToAny(Object obj) {
+    public static <T extends Object> T objToAny(Object obj) {
         if(obj instanceof DemoRequest)
             return (T)Any.pack((DemoRequest)obj);
         if(obj instanceof DemoResponse)
@@ -96,7 +96,7 @@ public class Utils {
         return null;
     }
 
-    protected static <T extends Object> T anyToObject(Any any) throws Exception {
+    public static <T extends Object> T anyToObject(Any any) throws Exception {
         if(any.is(DemoRequest.class))
             return (T)any.unpack(DemoRequest.class);
         if(any.is(DemoResponse.class))

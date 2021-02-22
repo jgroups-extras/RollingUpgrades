@@ -64,11 +64,15 @@ public class UPGRADE extends Protocol {
     protected StreamObserver<Request>                   send_stream; // for sending of messages and join requests
     protected final Lock                                send_stream_lock=new ReentrantLock();
     protected org.jgroups.common.Marshaller             marshaller;
+    protected boolean                                   rpcs;
 
     protected static final short                        REQ_ID=ClassConfigurator.getProtocolId(RequestCorrelator.class);
 
+
     public Marshaller marshaller()             {return marshaller;}
     public UPGRADE    marshaller(Marshaller m) {this.marshaller=m; return this;}
+    public boolean    rpcs()                   {return rpcs;}
+    public UPGRADE    rpcs(boolean r)          {this.rpcs=r; return this;}
 
     @ManagedAttribute public String getMarshaller() {
         return marshaller != null? marshaller.getClass().getSimpleName() : "n/a";
@@ -249,7 +253,7 @@ public class UPGRADE extends Protocol {
             is_rsp=hdr.type == RequestCorrelator.Header.RSP || hdr.type == RequestCorrelator.Header.EXC_RSP;
         }
         org.jgroups.common.ByteArray payload;
-        if(is_rsp) {
+        if(is_rsp || rpcs) {
             Object obj=jg_msg.getPayload();
             payload=marshaller.objectToBuffer(obj);
         }
@@ -278,7 +282,7 @@ public class UPGRADE extends Protocol {
         }
         if(!payload.isEmpty()) {
             byte[] tmp=payload.toByteArray();
-            if(is_rsp) {
+            if(is_rsp || rpcs) {
                 Object obj=marshaller.objectFromBuffer(tmp, 0, tmp.length);
                 jg_msg.setPayload(obj);
             }

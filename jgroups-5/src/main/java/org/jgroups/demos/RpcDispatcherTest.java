@@ -9,6 +9,7 @@ import org.jgroups.blocks.RpcDispatcher;
 import org.jgroups.logging.Log;
 import org.jgroups.logging.LogFactory;
 import org.jgroups.protocols.upgrade.UPGRADE;
+import org.jgroups.util.Rsp;
 import org.jgroups.util.RspList;
 import org.jgroups.util.Util;
 
@@ -66,6 +67,7 @@ public class RpcDispatcherTest {
     protected void start(String props, String name) throws Exception {
         ch=new JChannel(props).setName(name);
         setMarshaller(ch);
+        useRpcs(ch, true);
         disp=new RpcDispatcher(ch, this).setMethodLookup(id -> HANDLE); // we only have 1 method
 
         disp.setReceiver(new Receiver() {
@@ -86,11 +88,12 @@ public class RpcDispatcherTest {
             int cnt=count++;
             MethodCall call=new MethodCall(HANDLE_ID, s, cnt);
             RspList<Integer> rsps=disp.callRemoteMethods(null, call, RequestOptions.SYNC());
-
-            System.out.printf("rsps:\n%s\n", rsps.entrySet().stream()
-              .filter(e -> e.getKey() != null && e.getValue() != null)
-              .map(e -> String.format("%s: %s", e.getKey(), e.getValue()))
-              .collect(Collectors.joining("\n")));
+            System.out.printf("\nrsps:\n%s\n", rsps.entrySet().stream()
+              .map(e -> {
+                  Rsp<Integer> rsp=e.getValue();
+                  String received=rsp.wasReceived()? "" : "(not received)", suspected=rsp.wasSuspected()? "(suspected)" : "" ;
+                  return String.format("  %s: %d %s %s", e.getKey(), rsp.getValue(), received, suspected);
+              }).collect(Collectors.joining("\n")));
         }
         Util.close(disp, ch);
     }
@@ -108,6 +111,14 @@ public class RpcDispatcherTest {
             log.warn("%s not found", UPGRADE.class.getSimpleName());
     }
 
+
+    protected static void useRpcs(JChannel ch, boolean v) {
+        UPGRADE upgrade=ch.getProtocolStack().findProtocol(UPGRADE.class);
+        if(upgrade != null)
+            upgrade.rpcs(v);
+        else
+            log.warn("%s not found", UPGRADE.class.getSimpleName());
+    }
 
 
 }

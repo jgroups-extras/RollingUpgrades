@@ -7,10 +7,12 @@ import org.jgroups.View;
 import org.jgroups.blocks.MethodCall;
 import org.jgroups.blocks.RequestOptions;
 import org.jgroups.blocks.RpcDispatcher;
+import org.jgroups.util.Rsp;
 import org.jgroups.util.RspList;
 import org.jgroups.util.Util;
 
 import java.lang.reflect.Method;
+import java.util.stream.Collectors;
 
 /**
  * Tests RPCs across different JGroups versions
@@ -61,6 +63,9 @@ public class RpcDispatcherTest {
         ch.setName(name);
         disp=new RpcDispatcher(ch, this);
         disp.setMethodLookup(id -> METHODS[0]);
+        RpcDispatcher.Marshaller m=new DemoMarshaller();
+        disp.setRequestMarshaller(m);
+        disp.setResponseMarshaller(m);
 
         disp.setMembershipListener(new MembershipListener() {
             @Override public void viewAccepted(View new_view) {
@@ -76,11 +81,18 @@ public class RpcDispatcherTest {
         int count=1;
         while(true) {
             String str=Util.readStringFromStdin(": ");
-            if(str == null || str.isEmpty() || "exit".equals(str))
+            if(str == null || str.isEmpty())
+                str="";
+            if("exit".equals(str))
                 break;
             MethodCall call=new MethodCall(HELLO, str + " from " + ch.getAddress(), count++);
             RspList<Integer> rsps=disp.callRemoteMethods(null, call, RequestOptions.SYNC());
-            System.out.printf("rsps: %s\n", rsps);
+            System.out.printf("\nrsps:\n%s\n", rsps.entrySet().stream()
+              .map(e -> {
+                  Rsp<Integer> rsp=e.getValue();
+                  String received=rsp.wasReceived()? "" : "(not received)", suspected=rsp.wasSuspected()? "(suspected)" : "" ;
+                  return String.format("  %s: %d %s %s", e.getKey(), rsp.getValue(), received, suspected);
+              }).collect(Collectors.joining("\n")));
         }
         Util.close(disp, ch);
     }

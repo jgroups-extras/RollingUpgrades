@@ -4,9 +4,7 @@ import org.jgroups.*;
 import org.jgroups.blocks.MessageDispatcher;
 import org.jgroups.blocks.RequestHandler;
 import org.jgroups.blocks.RequestOptions;
-import org.jgroups.blocks.RpcDispatcher;
 import org.jgroups.common.Utils;
-import org.jgroups.util.Buffer;
 import org.jgroups.util.RspList;
 import org.jgroups.util.Util;
 
@@ -53,7 +51,7 @@ public class MessageDispatcherTest implements RequestHandler {
         ch=new JChannel(props);
         ch.setName(name);
         disp=new MessageDispatcher(ch, this);
-        disp.correlator().setMarshaller(new TestMarshaller());
+        disp.correlator().setMarshaller(new DemoMarshaller());
 
         disp.setMembershipListener(new MembershipListener() {
             @Override public void viewAccepted(View new_view) {
@@ -95,21 +93,6 @@ public class MessageDispatcherTest implements RequestHandler {
     }
 
 
-    protected static class TestMarshaller implements RpcDispatcher.Marshaller {
 
-        @Override
-        public Buffer objectToBuffer(Object obj) throws Exception {
-            // should be a response
-            byte[] b=Utils.pbToByteArray(obj);
-            if(b != null)
-                return new Buffer(b);
-            throw new IllegalArgumentException(String.format("response %s not handled", obj));
-        }
-
-        @Override
-        public Object objectFromBuffer(byte[] buf, int offset, int length) throws Exception {
-            return Utils.pbFromByteArray(buf, offset, length);
-        }
-    }
 
 }
