@@ -6,6 +6,7 @@ import org.jgroups.View;
 import org.jgroups.blocks.MethodCall;
 import org.jgroups.blocks.RequestOptions;
 import org.jgroups.blocks.RpcDispatcher;
+import org.jgroups.protocols.upgrade.UPGRADE;
 import org.jgroups.util.RspList;
 import org.jgroups.util.Util;
 
@@ -57,7 +58,11 @@ public class RpcDispatcherTest {
 
     protected void start(String props, String name) throws Exception {
         ch=new JChannel(props).setName(name);
-        disp=new RpcDispatcher(ch, this).setMethodLookup(id -> METHODS[0]);
+        disp=new RpcDispatcher(ch, this)
+          .setMethodLookup(id -> METHODS[0]); //  .setMarshaller(new DemoMarshaller());
+        disp.correlator().setMarshaller(new DemoMarshaller());
+        UPGRADE upgrade=ch.getProtocolStack().findProtocol(UPGRADE.class);
+        upgrade.setRpcs(true);
 
         disp.setMembershipListener(new MembershipListener() {
             @Override public void viewAccepted(View new_view) {

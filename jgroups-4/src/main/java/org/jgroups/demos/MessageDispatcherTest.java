@@ -1,19 +1,13 @@
 package org.jgroups.demos;
 
 import org.jgroups.*;
-import org.jgroups.blocks.Marshaller;
 import org.jgroups.blocks.MessageDispatcher;
 import org.jgroups.blocks.RequestHandler;
 import org.jgroups.blocks.RequestOptions;
-import org.jgroups.common.InputStreamAdapter;
-import org.jgroups.common.OutputStreamAdapter;
 import org.jgroups.common.Utils;
 import org.jgroups.util.RspList;
 import org.jgroups.util.Util;
 
-import java.io.DataInput;
-import java.io.DataOutput;
-import java.io.IOException;
 import java.util.stream.Collectors;
 
 /**
@@ -57,7 +51,7 @@ public class MessageDispatcherTest implements RequestHandler {
         ch=new JChannel(props);
         ch.setName(name);
         disp=new MessageDispatcher(ch, this);
-        disp.correlator().setMarshaller(new TestMarshaller());
+        disp.correlator().setMarshaller(new DemoMarshaller());
 
 
         disp.setMembershipListener(new MembershipListener() {
@@ -95,26 +89,6 @@ public class MessageDispatcherTest implements RequestHandler {
     protected static void help() {
         System.out.printf("%s [-help] [-props config] [-name name]\n",
                           MessageDispatcherTest.class.getSimpleName());
-    }
-
-
-
-    protected static class TestMarshaller implements Marshaller {
-
-        @Override
-        public void objectToStream(Object obj, DataOutput out) throws IOException {
-            Utils.pbToStream(obj, new OutputStreamAdapter(out));
-        }
-
-        @Override
-        public Object objectFromStream(DataInput in) {
-            try {
-                return Utils.pbFromStream(new InputStreamAdapter(in));
-            }
-            catch(Exception e) {
-                throw new RuntimeException(e);
-            }
-        }
     }
 
 }

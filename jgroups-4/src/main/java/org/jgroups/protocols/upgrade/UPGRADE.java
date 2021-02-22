@@ -54,6 +54,9 @@ public class UPGRADE extends Protocol {
     @ManagedAttribute(description="The global view (provided by the UpgradeServer)")
     protected org.jgroups.View                          global_view;
 
+    @Property(description="If RPCs are sent over UPGRADE, then we must serialize every request, not just the responses")
+    protected boolean                                   rpcs;
+
     @ManagedAttribute(description="The cluster this member is a part of")
     protected String                                    cluster;
     protected ManagedChannel                            channel;
@@ -61,6 +64,10 @@ public class UPGRADE extends Protocol {
     protected StreamObserver<Request>                   send_stream; // for sending of messages and join requests
     protected final Lock                                send_stream_lock=new ReentrantLock();
     protected static final short                        REQ_ID=ClassConfigurator.getProtocolId(RequestCorrelator.class);
+
+
+    public boolean getRpcs()          {return rpcs;}
+    public UPGRADE setRpcs(boolean r) {rpcs=r; return this;}
 
 
     @ManagedOperation(description="Enable forwarding and receiving of messages to/from the UpgradeServer")
@@ -143,8 +150,7 @@ public class UPGRADE extends Protocol {
             Request req=Request.newBuilder().setMessage(jgroupsMessageToProtobufMessage(cluster, msg)).build();
             send_stream_lock.lock();
             try {
-                // Per javadoc, StreamObserver is not thread-safe and calls onNext()
-                // must be handled by the application
+                // Per javadoc, StreamObserver is not thread-safe and calls onNext(); must be handled by the application
                 send_stream.onNext(req);
             }
             finally {
@@ -213,36 +219,6 @@ public class UPGRADE extends Protocol {
         up_prot.up(msg);
     }
 
-    protected static org.jgroups.upgrade_server.Address jgroupsAddressToProtobufAddress(Address jgroups_addr) {
-        if(jgroups_addr == null)
-            return org.jgroups.upgrade_server.Address.newBuilder().build();
-        if(!(jgroups_addr instanceof org.jgroups.util.UUID))
-            throw new IllegalArgumentException(String.format("JGroups address has to be of type UUID but is %s",
-                                                             jgroups_addr.getClass().getSimpleName()));
-        UUID uuid=(UUID)jgroups_addr;
-        String name=NameCache.get(jgroups_addr);
-
-        org.jgroups.upgrade_server.UUID pbuf_uuid=org.jgroups.upgrade_server.UUID.newBuilder()
-          .setLeastSig(uuid.getLeastSignificantBits()).setMostSig(uuid.getMostSignificantBits()).build();
-        org.jgroups.upgrade_server.Address.Builder builder=org.jgroups.upgrade_server.Address.newBuilder()
-          .setUuid(pbuf_uuid);
-        if(name != null)
-            builder.setName(name);
-        return builder.build();
-    }
-
-    protected static Address protobufAddressToJGroupsAddress(org.jgroups.upgrade_server.Address pbuf_addr) {
-        if(pbuf_addr == null)
-            return null;
-        org.jgroups.upgrade_server.UUID pbuf_uuid=pbuf_addr.hasUuid()? pbuf_addr.getUuid() : null;
-
-        UUID uuid=pbuf_uuid == null? null : new UUID(pbuf_uuid.getMostSig(), pbuf_uuid.getLeastSig());
-        String logical_name=pbuf_addr.getName();
-        if(uuid != null && logical_name != null && !logical_name.isEmpty())
-            NameCache.add(uuid, logical_name);
-        return uuid;
-    }
-
     protected static org.jgroups.upgrade_server.Message jgroupsMessageToProtobufMessage(String cluster, Message jgroups_msg) {
         if(jgroups_msg == null)
             return null;
@@ -278,13 +254,37 @@ public class UPGRADE extends Protocol {
             RequestCorrelator.Header hdr=protobufRpcHeaderToJGroupsReqHeader(msg.getRpcHeader());
             jgroups_mgs.putHeader(REQ_ID, hdr);
         }
-
-        if(msg.hasMetaData()) {
-            Metadata metadata=msg.getMetaData();
-            //int version=metadata.getVersion();
-        }
-
         return jgroups_mgs;
+    }
+
+    protected static org.jgroups.upgrade_server.Address jgroupsAddressToProtobufAddress(Address jgroups_addr) {
+        if(jgroups_addr == null)
+            return org.jgroups.upgrade_server.Address.newBuilder().build();
+        if(!(jgroups_addr instanceof org.jgroups.util.UUID))
+            throw new IllegalArgumentException(String.format("JGroups address has to be of type UUID but is %s",
+                                                             jgroups_addr.getClass().getSimpleName()));
+        UUID uuid=(UUID)jgroups_addr;
+        String name=NameCache.get(jgroups_addr);
+
+        org.jgroups.upgrade_server.UUID pbuf_uuid=org.jgroups.upgrade_server.UUID.newBuilder()
+          .setLeastSig(uuid.getLeastSignificantBits()).setMostSig(uuid.getMostSignificantBits()).build();
+        org.jgroups.upgrade_server.Address.Builder builder=org.jgroups.upgrade_server.Address.newBuilder()
+          .setUuid(pbuf_uuid);
+        if(name != null)
+            builder.setName(name);
+        return builder.build();
+    }
+
+    protected static Address protobufAddressToJGroupsAddress(org.jgroups.upgrade_server.Address pbuf_addr) {
+        if(pbuf_addr == null)
+            return null;
+        org.jgroups.upgrade_server.UUID pbuf_uuid=pbuf_addr.hasUuid()? pbuf_addr.getUuid() : null;
+
+        UUID uuid=pbuf_uuid == null? null : new UUID(pbuf_uuid.getMostSig(), pbuf_uuid.getLeastSig());
+        String logical_name=pbuf_addr.getName();
+        if(uuid != null && logical_name != null && !logical_name.isEmpty())
+            NameCache.add(uuid, logical_name);
+        return uuid;
     }
 
     protected static org.jgroups.View protobufViewToJGroupsView(View v) {
