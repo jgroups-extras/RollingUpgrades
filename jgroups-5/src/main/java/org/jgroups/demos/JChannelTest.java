@@ -1,12 +1,16 @@
 package org.jgroups.demos;
 
 import org.jgroups.*;
+import org.jgroups.logging.Log;
+import org.jgroups.logging.LogFactory;
+import org.jgroups.protocols.upgrade.UPGRADE;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 
 public class JChannelTest implements Receiver {
-    JChannel channel;
+    protected JChannel         channel;
+    protected static final Log log=LogFactory.getLog(RpcDispatcherTest.class);
 
     public void viewAccepted(View new_view) {
         System.out.println("** view: " + new_view);
@@ -22,6 +26,7 @@ public class JChannelTest implements Receiver {
         if(name != null)
             channel.name(name);
         channel.setReceiver(this);
+        setMarshaller(channel);
         channel.connect("ChatCluster");
         eventLoop();
         channel.close();
@@ -57,7 +62,7 @@ public class JChannelTest implements Receiver {
 
 
     public static void main(String[] args) throws Exception {
-        String props="udp.xml";
+        String props="config.xml";
         String name=null;
 
         for(int i=0; i < args.length; i++) {
@@ -74,6 +79,14 @@ public class JChannelTest implements Receiver {
         }
 
         new JChannelTest().start(props, name);
+    }
+
+    protected static void setMarshaller(JChannel ch) {
+        UPGRADE upgrade=ch.getProtocolStack().findProtocol(UPGRADE.class);
+        if(upgrade != null)
+            upgrade.marshaller(new DemoMarshaller());
+        else
+            log.warn("%s not found", UPGRADE.class.getSimpleName());
     }
 
     protected static void help() {

@@ -6,11 +6,15 @@ import org.jgroups.View;
 import org.jgroups.blocks.MethodCall;
 import org.jgroups.blocks.RequestOptions;
 import org.jgroups.blocks.RpcDispatcher;
+import org.jgroups.logging.Log;
+import org.jgroups.logging.LogFactory;
 import org.jgroups.protocols.upgrade.UPGRADE;
+import org.jgroups.util.Rsp;
 import org.jgroups.util.RspList;
 import org.jgroups.util.Util;
 
 import java.lang.reflect.Method;
+import java.util.stream.Collectors;
 
 /**
  * Tests RPCs across different JGroups versions
@@ -22,6 +26,7 @@ public class RpcDispatcherTest {
     protected RpcDispatcher         disp;
     protected static final Method[] METHODS=new Method[1];
     protected static final short    HELLO=0;
+    protected static final Log      log=LogFactory.getLog(RpcDispatcherTest.class);
 
     static {
         try {
@@ -59,10 +64,9 @@ public class RpcDispatcherTest {
     protected void start(String props, String name) throws Exception {
         ch=new JChannel(props).setName(name);
         disp=new RpcDispatcher(ch, this)
-          .setMethodLookup(id -> METHODS[0]); //  .setMarshaller(new DemoMarshaller());
-        disp.correlator().setMarshaller(new DemoMarshaller());
-        UPGRADE upgrade=ch.getProtocolStack().findProtocol(UPGRADE.class);
-        upgrade.setRpcs(true);
+          .setMethodLookup(id -> METHODS[0]);
+        setMarshaller(ch);
+        useRpcs(ch, true);
 
         disp.setMembershipListener(new MembershipListener() {
             @Override public void viewAccepted(View new_view) {
@@ -78,7 +82,12 @@ public class RpcDispatcherTest {
                 break;
             MethodCall call=new MethodCall(HELLO, str + " from " + ch.getAddress(), count++);
             RspList<Integer> rsps=disp.callRemoteMethods(null, call, RequestOptions.SYNC());
-            System.out.printf("rsps: %s\n", rsps);
+            System.out.printf("\nrsps:\n%s\n", rsps.entrySet().stream()
+              .map(e -> {
+                  Rsp<Integer> rsp=e.getValue();
+                  String received=rsp.wasReceived()? "" : "(not received)", suspected=rsp.wasSuspected()? "(suspected)" : "" ;
+                  return String.format("  %s: %d %s %s", e.getKey(), rsp.getValue(), received, suspected);
+              }).collect(Collectors.joining("\n")));
         }
         Util.close(disp, ch);
     }
@@ -86,5 +95,22 @@ public class RpcDispatcherTest {
     protected static void help() {
         System.out.printf("%s [-help] [-props config] [-name name]\n",
                           RpcDispatcherTest.class.getSimpleName());
+    }
+
+    protected static void setMarshaller(JChannel ch) {
+        UPGRADE upgrade=ch.getProtocolStack().findProtocol(UPGRADE.class);
+        if(upgrade != null)
+            upgrade.marshaller(new DemoMarshaller());
+        else
+            log.warn("%s not found", UPGRADE.class.getSimpleName());
+    }
+
+
+    protected static void useRpcs(JChannel ch, boolean v) {
+        UPGRADE upgrade=ch.getProtocolStack().findProtocol(UPGRADE.class);
+        if(upgrade != null)
+            upgrade.setRpcs(v);
+        else
+            log.warn("%s not found", UPGRADE.class.getSimpleName());
     }
 }

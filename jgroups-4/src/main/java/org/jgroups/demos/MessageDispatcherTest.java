@@ -5,6 +5,9 @@ import org.jgroups.blocks.MessageDispatcher;
 import org.jgroups.blocks.RequestHandler;
 import org.jgroups.blocks.RequestOptions;
 import org.jgroups.common.Utils;
+import org.jgroups.logging.Log;
+import org.jgroups.logging.LogFactory;
+import org.jgroups.protocols.upgrade.UPGRADE;
 import org.jgroups.util.RspList;
 import org.jgroups.util.Util;
 
@@ -18,6 +21,7 @@ import java.util.stream.Collectors;
 public class MessageDispatcherTest implements RequestHandler {
     protected JChannel          ch;
     protected MessageDispatcher disp;
+    protected static final Log  log=LogFactory.getLog(MessageDispatcherTest.class);
 
     public static void main(String[] args) throws Exception {
         String  props="config.xml", name=null;
@@ -50,9 +54,8 @@ public class MessageDispatcherTest implements RequestHandler {
     protected void start(String props, String name) throws Exception {
         ch=new JChannel(props);
         ch.setName(name);
+        setMarshaller(ch);
         disp=new MessageDispatcher(ch, this);
-        disp.correlator().setMarshaller(new DemoMarshaller());
-
 
         disp.setMembershipListener(new MembershipListener() {
             @Override public void viewAccepted(View new_view) {
@@ -90,5 +93,14 @@ public class MessageDispatcherTest implements RequestHandler {
         System.out.printf("%s [-help] [-props config] [-name name]\n",
                           MessageDispatcherTest.class.getSimpleName());
     }
+
+    protected static void setMarshaller(JChannel ch) {
+        UPGRADE upgrade=ch.getProtocolStack().findProtocol(UPGRADE.class);
+        if(upgrade != null)
+            upgrade.marshaller(new DemoMarshaller());
+        else
+            log.warn("%s not found", UPGRADE.class.getSimpleName());
+    }
+
 
 }

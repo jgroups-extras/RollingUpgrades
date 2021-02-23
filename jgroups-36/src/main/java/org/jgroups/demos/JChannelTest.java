@@ -60,7 +60,7 @@ public class JChannelTest extends ReceiverAdapter {
 
 
     public static void main(String[] args) throws Exception {
-        String props="udp.xml";
+        String props="config.xml";
         String name=null;
 
         for(int i=0; i < args.length; i++) {
