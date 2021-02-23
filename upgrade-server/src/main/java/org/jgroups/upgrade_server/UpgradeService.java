@@ -3,7 +3,6 @@ package org.jgroups.upgrade_server;
 import io.grpc.stub.StreamObserver;
 
 import java.util.*;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.Lock;
@@ -115,7 +114,7 @@ public class UpgradeService extends UpgradeServiceGrpc.UpgradeServiceImplBase {
     protected void handleJoinRequest(JoinRequest join_req, StreamObserver<Response> responseObserver) {
         final String  cluster=join_req.getClusterName();
         final Address joiner=join_req.getAddress();
-        SynchronizedMap m=members.computeIfAbsent(cluster, k -> new SynchronizedMap(new LinkedHashMap()));
+        SynchronizedMap m=members.computeIfAbsent(cluster, k -> new SynchronizedMap(new LinkedHashMap<>()));
         Map<Address,StreamObserver<Response>> map=m.getMap();
         Lock lock=m.getLock();
         lock.lock();
