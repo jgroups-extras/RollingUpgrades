@@ -148,33 +148,43 @@ to all cluster members, which de-activate `UPGRADE` (or even remove it from the 
 
 === Demos
 The demos show how programs run in different versions of JGroups can join the same cluster and
-exchange (and understand) each others' messages. Apart from a simple string-based message payload (JChannelTest),
+exchange (and understand) each other's messages. Apart from a simple string-based message payload (JChannelTest),
 protobuf is used to translate the different payloads into a common format that is understood by all.
 
-== JChannelTest
+The demos can be run by executing the scripts in `./bin`: `chat-x.sh` runs `JChanelTest`, `md-x.sh`
+`MessageDispatcherTest` and `rpcs-x.sh` `RpcDispatcherTest`.
+
+==== JChannelTest
 This demo sends a simple string around. The string's bytes are retrieved and injected into the message
 as a byte array. The receiving side fetches the byte array and creates a string from it. Because strings are
 (de-)serialized the same way across versions, this works for sending messages between different versions and also
 across different Java versions.
 
 
-== MessageDispatcherTest
+==== MessageDispatcherTest
 This test calls `MessageDispatcher.castMessage()` to invoke `handle()` in all cluster members. The argument to the
 request is `DemoRequest` and the response is `DemoResponse`; both are protobuf types.
 
-The request is serialized by application code (MessageDispatcherTest) and also deserialized (in `handle()`). The response
-is (de-)serialized by the Marshaller set by MessageDispatcherTest (in 3 and 4) and by `UPGRADE` in 5 (which doesn't have
-Marshaller anymore).
+The request is serialized by application code (MessageDispatcherTest) and also deserialized (in `handle()`).
+The response is (de-)serialized by the Marshaller set by MessageDispatcherTest (in 3) and by `UPGRADE` in 4 and 5
+(which doesn't have Marshaller anymore).
+
+The code in `UPGRADE` takes the payload of a message and converts it to protobuf (send side). On the receive side,
+it converts the protobuf (payload of the message) into a version-dependent payload and sends it up the stack.
 
 By using the protobuf types DemoRequest and DemoResponse, common to all versions, the different MessageDispatcher nodes
 can talk to each other.
 
 
-== RpcDispatcherTest
+==== RpcDispatcherTest
 
+This is similar to the `MessageDispatcherTest` above, but we're also (de-)serializing the requests, not just the
+responses.
 
-=== Misc
+=== Misc / todos
 * In a first stage, only addresses of type UUID are implemented
 * Application headers are currently not supported (perhaps they never will)
+* It would be nice to have the version-dependent code only in one place, perhaps generate/copy it. For instance, we
+have 3 JChannelTests, MessageDispatcherTests, RpcDispatcherTests and UPGRADE protocols!
 
 
