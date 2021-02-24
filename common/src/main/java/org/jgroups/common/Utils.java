@@ -7,7 +7,10 @@ import org.jgroups.demos.DemoRequest;
 import org.jgroups.demos.DemoResponse;
 
 import java.io.*;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.nio.ByteBuffer;
+import java.security.AccessControlException;
 
 /**
  * Misc utility methods, e.g. for marshalling and unmarshalling
@@ -107,6 +110,71 @@ public class Utils {
             return (T)any.unpack(StringValue.class).getValue();
         return null;
     }
+
+    public static InputStream getFile(String filename) throws IOException {
+        InputStream configStream = null;
+
+        try { // check to see if the properties string is the name of a file.
+            configStream=new FileInputStream(filename);
+        }
+        catch(FileNotFoundException | AccessControlException fnfe) {
+            // the properties string is not a file
+        }
+
+        if(configStream == null) { // check to see if the properties string is a URL.
+            try {
+                configStream=new URL(filename).openStream();
+            }
+            catch (MalformedURLException mre) {
+                // the properties string is not a URL
+            }
+        }
+
+        // Check to see if the properties string is the name of a resource, e.g. udp.xml.
+        if(configStream == null)
+            return getResourceAsStream(filename, (Class<?>)null);
+        return configStream;
+    }
+
+    public static InputStream getResourceAsStream(String name,Class<?> clazz) {
+        return getResourceAsStream(name, clazz != null ? clazz.getClassLoader() : null);
+    }
+
+    public static InputStream getResourceAsStream(String name,ClassLoader loader) {
+        InputStream retval;
+        if (loader != null) {
+            retval = loader.getResourceAsStream(name);
+            if (retval != null)
+                return retval;
+        }
+        try {
+            loader=Thread.currentThread().getContextClassLoader();
+            if(loader != null) {
+                retval=loader.getResourceAsStream(name);
+                if(retval != null)
+                    return retval;
+            }
+        }
+        catch(Throwable ignored) {
+        }
+        try {
+            loader=ClassLoader.getSystemClassLoader();
+            if(loader != null) {
+                retval=loader.getResourceAsStream(name);
+                if(retval != null)
+                    return retval;
+            }
+        }
+        catch(Throwable ignored) {
+        }
+        try {
+            return new FileInputStream(name);
+        }
+        catch(FileNotFoundException e) {
+        }
+        return null;
+    }
+
 
 
     /** A JGroups version-independent marshaller for 3.6 and 4.x. Currently only supports a limited number of types,

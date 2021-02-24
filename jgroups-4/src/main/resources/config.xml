@@ -38,5 +38,6 @@
     <FRAG2 frag_size="60K"  />
     <upgrade.UPGRADE active="true"
                      server_address="localhost"
-                     server_port="50051"/>
+                     server_port="50051"
+                     server_cert="${server.cert}"/>
 </config>

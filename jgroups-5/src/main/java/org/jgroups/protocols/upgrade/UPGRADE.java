@@ -3,6 +3,8 @@ package org.jgroups.protocols.upgrade;
 import com.google.protobuf.ByteString;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import io.grpc.netty.GrpcSslContexts;
+import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.stub.StreamObserver;
 import org.jgroups.Address;
 import org.jgroups.BytesMessage;
@@ -15,12 +17,15 @@ import org.jgroups.annotations.Property;
 import org.jgroups.blocks.RequestCorrelator;
 import org.jgroups.common.ByteArray;
 import org.jgroups.common.Marshaller;
+import org.jgroups.common.Utils;
 import org.jgroups.conf.ClassConfigurator;
 import org.jgroups.stack.Protocol;
 import org.jgroups.upgrade_server.*;
 import org.jgroups.util.NameCache;
 import org.jgroups.util.UUID;
 
+import java.io.FileNotFoundException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -48,6 +53,10 @@ public class UPGRADE extends Protocol {
     @Property(description="The port on which the UpgradeServer is listening")
     protected int                                       server_port=50051;
 
+    @Property(description="The filename of the UpgradeServer's certificate (with the server's public key). " +
+      "If non-null and non-empty, the client will use an encrypted connection to the server")
+    protected String                                    server_cert;
+
     @ManagedAttribute(description="The local address")
     protected Address                                   local_addr;
 
@@ -65,7 +74,7 @@ public class UPGRADE extends Protocol {
     protected final Lock                                send_stream_lock=new ReentrantLock();
     protected org.jgroups.common.Marshaller             marshaller;
     protected boolean                                   rpcs;
-
+    protected InputStream                               server_cert_stream;
     protected static final short                        REQ_ID=ClassConfigurator.getProtocolId(RequestCorrelator.class);
 
 
@@ -94,11 +103,28 @@ public class UPGRADE extends Protocol {
         }
     }
 
+    public void init() throws Exception {
+        super.init();
+        if(server_cert != null && !server_cert.trim().isEmpty() &&
+          (server_cert_stream=Utils.getFile(server_cert)) == null)
+            throw new FileNotFoundException(String.format("server certificate (%s) not found", server_cert));
+    }
+
     public void start() throws Exception {
         super.start();
         if(marshaller == null)
             throw new IllegalStateException("marshaller must not be null");
-        channel=ManagedChannelBuilder.forAddress(server_address, server_port).usePlaintext().build();
+        if(server_cert_stream == null) {
+            channel=ManagedChannelBuilder.forAddress(server_address, server_port).usePlaintext().build();
+            log.info("established plaintext connection to %s:%d", server_address, server_port);
+        }
+        else {
+            channel=NettyChannelBuilder.forAddress(server_address, server_port)
+              .sslContext(GrpcSslContexts.forClient().trustManager(server_cert_stream).build())
+              .build();
+            log.info("established encrypted connection to %s:%d (server certificate: %s)",
+                     server_address, server_port, server_cert);
+        }
         asyncStub=UpgradeServiceGrpc.newStub(channel);
     }
 

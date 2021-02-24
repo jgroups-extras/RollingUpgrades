@@ -19,6 +19,7 @@
     <properties>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
+        <grpc.version>1.36.0</grpc.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <!-- nexus-staging-maven-plugin -->
@@ -118,17 +119,17 @@
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-netty</artifactId>
-            <version>1.31.1</version>
+            <version>${grpc.version}</version>
         </dependency>
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-protobuf</artifactId>
-            <version>1.31.1</version>
+            <version>${grpc.version}</version>
         </dependency>
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-stub</artifactId>
-            <version>1.31.1</version>
+            <version>${grpc.version}</version>
         </dependency>
         <!-- Kludge to find javax.annotation.Generated in the protobuf-generated files (should be temporary) -->
         <dependency>
