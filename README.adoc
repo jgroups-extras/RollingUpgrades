@@ -181,6 +181,23 @@ can talk to each other.
 This is similar to the `MessageDispatcherTest` above, but we're also (de-)serializing the requests, not just the
 responses.
 
+
+=== Using secure connections
+By default, `UpgradeServer` and the clients (`UPGRADE` protocols) use plaintext gRpc connections. This can be changed,
+so that communication between server and clients is encrypted. To do this, 3 steps have to be taken:
+
+. Generate a certificate and a private/public key pair for the server and clients to use
+* This can be done with `bin/genkey.sh`: this generates `server.cert` and `server.key`
+** Make sure you set the hostname (in `genkey.sh`) to the host on which `UpgradeServer` will be running.
+* Of course, in a production environment, self-signed certificates should not be used!
+. Run UpgradeServer with the key and certificate
+* Either run `bin/upgrade-server-secure.sh` or pass options `-cert path-to-certificate` and `-key path-to-key` to
+  `UpgradeServer`.
+. Set `server_cert` in `UPGRADE` to point to the server's certificate (generated above)
+* `<UPGRADE server_cert="/home/user/certs/server.cert" />`
+
+
+
 === Misc / todos
 * In a first stage, only addresses of type UUID are implemented
 * Application headers are currently not supported (perhaps they never will)
