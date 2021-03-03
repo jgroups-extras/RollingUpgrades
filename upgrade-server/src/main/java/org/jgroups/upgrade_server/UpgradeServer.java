@@ -33,10 +33,6 @@ public class UpgradeServer {
         server.awaitTermination();
     }
 
-    public void stop() throws InterruptedException {
-        server.awaitTermination();
-    }
-
     protected void blockUntilShutdown() throws InterruptedException {
         server.awaitTermination();
     }
