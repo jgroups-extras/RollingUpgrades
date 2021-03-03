@@ -1,39 +1,46 @@
 package org.jgroups.upgrade_server;
 
+import com.google.protobuf.ByteString;
 import io.grpc.stub.StreamObserver;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.logging.Logger;
 
 /**
  * @author Bela Ban
  * @since  1.0.0
- * todo: Add logging instead of System.err.printf
  */
 public class UpgradeService extends UpgradeServiceGrpc.UpgradeServiceImplBase {
-    protected final ConcurrentMap<String,SynchronizedMap> members=new ConcurrentHashMap<>();
-    protected long                                        view_id=0; // global, for all clusters, but who cares
+    protected final Map<String,SynchronizedMap> members=new ConcurrentHashMap<>();
+    protected long                              view_id; // global, for all clusters, but who cares
+    protected final static Logger               log=Logger.getLogger(UpgradeService.class.getName());
 
     @Override
     public StreamObserver<Request> connect(StreamObserver<Response> responseObserver) {
         return new StreamObserver<Request>() {
             public void onNext(Request req) {
                 if(req.hasMessage()) {
+                    Message m=req.getMessage();
+                    ByteString pl=m.getPayload();
+                    int size=pl != null? pl.size() : 0;
+                    log.fine(String.format("msg from %s: %s", m.getSender().getName(), String.format("%d bytes", size)));
                     handleMessage(req.getMessage());
                     return;
                 }
                 if(req.hasJoinReq()) {
+                    log.fine(String.format("handleJoinRequest(%s)", req.getJoinReq().getAddress().getName()));
                     handleJoinRequest(req.getJoinReq(), responseObserver);
                     return;
                 }
                 if(req.hasLeaveReq()) {
-                    handleLeaveRequest(req.getLeaveReq(), responseObserver);
+                    log.fine(String.format("handleLeaveRequest(%s)", req.getLeaveReq().getLeaver().getName()));
+                    handleLeaveRequest(req.getLeaveReq());
                     return;
                 }
-                System.err.printf("request not known: %s\n", req);
+                log.warning(String.format("request not known: %s", req));
             }
 
             public void onError(Throwable t) {
@@ -127,7 +134,7 @@ public class UpgradeService extends UpgradeServiceGrpc.UpgradeServiceImplBase {
         }
     }
 
-    protected void handleLeaveRequest(LeaveRequest leave_req, StreamObserver<Response> responseObserver) {
+    protected void handleLeaveRequest(LeaveRequest leave_req) {
         final String  cluster=leave_req.getClusterName();
         boolean       removed=false;
         Address       leaver=leave_req.getLeaver();
