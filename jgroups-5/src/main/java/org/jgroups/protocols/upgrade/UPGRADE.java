@@ -2,7 +2,6 @@ package org.jgroups.protocols.upgrade;
 
 import com.google.protobuf.ByteString;
 import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
 import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.stub.StreamObserver;
@@ -114,14 +113,13 @@ public class UPGRADE extends Protocol {
         super.start();
         if(marshaller == null)
             throw new IllegalStateException("marshaller must not be null");
+        NettyChannelBuilder cb=NettyChannelBuilder.forAddress(server_address, server_port);
         if(server_cert_stream == null) {
-            channel=ManagedChannelBuilder.forAddress(server_address, server_port).usePlaintext().build();
+            channel=cb.usePlaintext().build();
             log.info("established plaintext connection to %s:%d", server_address, server_port);
         }
         else {
-            channel=NettyChannelBuilder.forAddress(server_address, server_port)
-              .sslContext(GrpcSslContexts.forClient().trustManager(server_cert_stream).build())
-              .build();
+            channel=cb.sslContext(GrpcSslContexts.forClient().trustManager(server_cert_stream).build()).build();
             log.info("established encrypted connection to %s:%d (server certificate: %s)",
                      server_address, server_port, server_cert);
         }
