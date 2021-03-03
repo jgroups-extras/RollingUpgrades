@@ -1,11 +1,6 @@
 package org.jgroups.protocols.upgrade;
 
 import com.google.protobuf.ByteString;
-import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
-import io.grpc.netty.GrpcSslContexts;
-import io.grpc.netty.NettyChannelBuilder;
-import io.grpc.stub.StreamObserver;
 import org.jgroups.Address;
 import org.jgroups.Event;
 import org.jgroups.Message;
@@ -14,20 +9,18 @@ import org.jgroups.annotations.ManagedAttribute;
 import org.jgroups.annotations.ManagedOperation;
 import org.jgroups.annotations.Property;
 import org.jgroups.blocks.RequestCorrelator;
-import org.jgroups.common.Utils;
+import org.jgroups.common.GrpcClient;
 import org.jgroups.conf.ClassConfigurator;
 import org.jgroups.stack.Protocol;
-import org.jgroups.upgrade_server.*;
+import org.jgroups.upgrade_server.Request;
+import org.jgroups.upgrade_server.RpcHeader;
+import org.jgroups.upgrade_server.View;
+import org.jgroups.upgrade_server.ViewId;
 import org.jgroups.util.UUID;
 
-import java.io.FileNotFoundException;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 /**
@@ -64,18 +57,15 @@ public class UPGRADE extends Protocol {
 
     @ManagedAttribute(description="The cluster this member is a part of")
     protected String                                    cluster;
-    protected ManagedChannel                            channel;
-    protected UpgradeServiceGrpc.UpgradeServiceStub     asyncStub;
-    protected StreamObserver<Request>                   send_stream; // for sending of messages and join requests
-    protected final Lock                                send_stream_lock = new ReentrantLock();
-    protected InputStream                               server_cert_stream;
+
+    protected GrpcClient                                client=new GrpcClient();
     protected static final short                        REQ_ID=ClassConfigurator.getProtocolId(RequestCorrelator.class);
 
 
     @ManagedOperation(description="Enable forwarding and receiving of messages to/from the UpgradeServer")
     public synchronized void activate() {
         if(!active) {
-            connect(cluster);
+            connect();
             active=true;
         }
     }
@@ -90,35 +80,18 @@ public class UPGRADE extends Protocol {
 
     public void init() throws Exception {
         super.init();
-        if(server_cert != null && !server_cert.trim().isEmpty() &&
-          (server_cert_stream=Utils.getFile(server_cert)) == null)
-            throw new FileNotFoundException(String.format("server certificate (%s) not found", server_cert));
+        client.setServerAddress(server_address).setServerPort(server_port).setServerCert(server_cert)
+          .addViewHandler(this::handleView).addMessageHandler(this::handleMessage)
+          .start();
     }
 
     public void start() throws Exception {
         super.start();
-        if(server_cert_stream == null) {
-            channel=ManagedChannelBuilder.forAddress(server_address, server_port).usePlaintext().build();
-            log.info("established plaintext connection to %s:%d", server_address, server_port);
-        }
-        else {
-            channel=NettyChannelBuilder.forAddress(server_address, server_port)
-              .sslContext(GrpcSslContexts.forClient().trustManager(server_cert_stream).build())
-              .build();
-            log.info("established encrypted connection to %s:%d (server certificate: %s)",
-                     server_address, server_port, server_cert);
-        }
-        asyncStub=UpgradeServiceGrpc.newStub(channel);
     }
 
     public void stop() {
         super.stop();
-        channel.shutdown();
-        try {
-            channel.awaitTermination(30, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            // Ignore
-        }
+        client.stop();
     }
 
     public Object down(Event evt) {
@@ -127,20 +100,16 @@ public class UPGRADE extends Protocol {
                 if(!active)
                     return down_prot.down(evt);
                 // else send to UpgradeServer
-                if(send_stream != null) {
-                    Message msg=(Message)evt.getArg();
-                    if(msg.getSrc() == null)
-                        msg.setSrc(local_addr);
-                    Request req=Request.newBuilder().setMessage(jgroupsMessageToProtobufMessage(cluster, msg)).build();
-                    send_stream_lock.lock();
-                    try {
-                        // Per javadoc, StreamObserver is not thread-safe and calls onNext()
-                        // must be handled by the application
-                        send_stream.onNext(req);
-                    }
-                    finally {
-                        send_stream_lock.unlock();
-                    }
+                Message msg=(Message)evt.getArg();
+                if(msg.getSrc() == null)
+                    msg.setSrc(local_addr);
+                try {
+                    org.jgroups.upgrade_server.Message m=jgroupsMessageToProtobufMessage(cluster, msg);
+                    Request req=Request.newBuilder().setMessage(m).build();
+                    client.send(req);
+                }
+                catch(Exception e) {
+                    log.error("%s: failed sending message: %s", local_addr, e);
                 }
                 return null;
             case Event.SET_LOCAL_ADDRESS:
@@ -153,7 +122,7 @@ public class UPGRADE extends Protocol {
                 cluster=evt.arg();
                 Object ret=down_prot.down(evt);
                 if(active)
-                    connect(cluster);
+                    connect();
                 return ret;
             case Event.DISCONNECT:
                 ret=down_prot.down(evt);
@@ -175,52 +144,18 @@ public class UPGRADE extends Protocol {
     }
 
 
-
-    protected synchronized void connect(String cluster) {
-        send_stream=asyncStub.connect(new StreamObserver<Response>() {
-            public void onNext(Response rsp) {
-                if(rsp.hasMessage()) {
-                    handleMessage(rsp.getMessage());
-                    return;
-                }
-                if(rsp.hasView()) {
-                    handleView(rsp.getView());
-                    return;
-                }
-                throw new IllegalStateException(String.format("response is illegal: %s", rsp));
-            }
-
-            public void onError(Throwable t) {
-                log.error("exception from server: %s", t);
-            }
-
-            public void onCompleted() {
-                log.debug("server is done");
-            }
-        });
-        org.jgroups.upgrade_server.Address pbuf_addr=jgroupsAddressToProtobufAddress(local_addr);
-        JoinRequest join_req=JoinRequest.newBuilder().setAddress(pbuf_addr).setClusterName(cluster).build();
-        Request req=Request.newBuilder().setJoinReq(join_req).build();
-        send_stream.onNext(req);
+    protected void connect() {
+        org.jgroups.upgrade_server.Address addr=jgroupsAddressToProtobufAddress(local_addr);
+        client.connect(cluster, addr);
     }
 
-
-
-    protected synchronized void disconnect() {
-        if(send_stream != null) {
-            if(local_addr != null && cluster != null) {
-                org.jgroups.upgrade_server.Address local=jgroupsAddressToProtobufAddress(local_addr);
-                LeaveRequest leave_req=LeaveRequest.newBuilder().setClusterName(cluster).setLeaver(local).build();
-                Request request=Request.newBuilder().setLeaveReq(leave_req).build();
-                send_stream.onNext(request);
-            }
-            send_stream.onCompleted();
-        }
-        global_view=null;
+    protected void disconnect() {
+        org.jgroups.upgrade_server.Address addr=jgroupsAddressToProtobufAddress(local_addr);
+        client.disconnect(cluster, addr);
     }
+
 
     protected void handleView(View view) {
-        // System.out.printf("received view %s\n", print(view));
         org.jgroups.View jg_view=protobufViewToJGroupsView(view);
         global_view=jg_view;
         up_prot.up(new Event(Event.VIEW_CHANGE, jg_view));
@@ -228,7 +163,6 @@ public class UPGRADE extends Protocol {
     }
 
     protected void handleMessage(org.jgroups.upgrade_server.Message m) {
-        // System.out.printf("received message %s\n", print(m));
         Message msg=protobufMessageToJGroupsMessage(m);
         up_prot.up(new Event(Event.MSG, msg));
     }
