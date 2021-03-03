@@ -267,25 +267,4 @@ public class UPGRADE extends Protocol {
     }
 
 
-    protected static String print(org.jgroups.upgrade_server.Message msg) {
-        return String.format("cluster: %s sender: %s dest: %s %d bytes\n", msg.getClusterName(),
-                             msg.hasDestination()? msg.getDestination().getName() : "null",
-                             msg.hasSender()? msg.getSender().getName() : "null",
-                             msg.getPayload().isEmpty()? 0 : msg.getPayload().size());
-    }
-
-    public static String print(View v) {
-        if(v.hasViewId()) {
-            ViewId view_id=v.getViewId();
-            return String.format("%s|%d [%s]",
-                          view_id.getCreator().getName(), view_id.getId(),
-                          v.getMemberList().stream().map(org.jgroups.upgrade_server.Address::getName)
-                                   .collect(Collectors.joining(", ")));
-        }
-        return String.format("[%s]",
-                             v.getMemberList().stream().map(org.jgroups.upgrade_server.Address::getName)
-                               .collect(Collectors.joining(", ")));
-    }
-
-
 }
