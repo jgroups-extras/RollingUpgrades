@@ -46,6 +46,9 @@ public class UPGRADE extends Protocol {
       "If non-null and non-empty, the client will use an encrypted connection to the server")
     protected String                                    server_cert;
 
+    @Property(description="Time in ms between trying to reconnect to UpgradeServer (while disconnected)")
+    protected long                                      reconnect_interval=3000;
+
     @ManagedAttribute(description="The local address")
     protected Address                                   local_addr;
 
@@ -82,6 +85,8 @@ public class UPGRADE extends Protocol {
         super.init();
         client.setServerAddress(server_address).setServerPort(server_port).setServerCert(server_cert)
           .addViewHandler(this::handleView).addMessageHandler(this::handleMessage)
+          .setReconnectionFunction(this::connect)
+          .setReconnectInterval(reconnect_interval)
           .start();
     }
 
