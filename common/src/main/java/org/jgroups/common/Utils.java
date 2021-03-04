@@ -36,6 +36,13 @@ public class Utils {
     }
 
 
+    public static void sleep(long time_ms) {
+        try {
+            Thread.sleep(time_ms);
+        }
+        catch(InterruptedException ignored) {
+        }
+    }
 
     public static void writeInt(int num, byte[] buf, int offset) {
         buf[offset+3]=(byte)num;

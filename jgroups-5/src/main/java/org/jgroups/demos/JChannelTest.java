@@ -46,6 +46,7 @@ public class JChannelTest implements Receiver {
                 channel.send(msg);
             }
             catch(Exception e) {
+                System.err.println(e.getMessage());
             }
         }
     }

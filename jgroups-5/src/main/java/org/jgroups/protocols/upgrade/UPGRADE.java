@@ -13,6 +13,7 @@ import org.jgroups.blocks.RequestCorrelator;
 import org.jgroups.common.ByteArray;
 import org.jgroups.common.GrpcClient;
 import org.jgroups.common.Marshaller;
+import org.jgroups.conf.AttributeType;
 import org.jgroups.conf.ClassConfigurator;
 import org.jgroups.stack.Protocol;
 import org.jgroups.upgrade_server.*;
@@ -47,6 +48,10 @@ public class UPGRADE extends Protocol {
       "If non-null and non-empty, the client will use an encrypted connection to the server")
     protected String                                    server_cert;
 
+    @Property(description="Time in ms between trying to reconnect to UpgradeServer (while disconnected)",
+      type=AttributeType.TIME)
+    protected long                                      reconnect_interval=3000;
+
     @ManagedAttribute(description="The local address")
     protected Address                                   local_addr;
 
@@ -72,6 +77,14 @@ public class UPGRADE extends Protocol {
         return marshaller != null? marshaller.getClass().getSimpleName() : "n/a";
     }
 
+    @ManagedAttribute(description="True if the connected to the gRPC server")
+    public boolean isConnected() {
+        return client.isConnected();
+    }
+
+    @ManagedAttribute(description="True if the reconnector is running")
+    public boolean isReconnecting() {return client.reconnectorRunning();}
+
     @ManagedOperation(description="Enable forwarding and receiving of messages to/from the UpgradeServer")
     public synchronized void activate() {
         if(!active) {
@@ -92,13 +105,15 @@ public class UPGRADE extends Protocol {
         super.init();
         client.setServerAddress(server_address).setServerPort(server_port).setServerCert(server_cert)
           .addViewHandler(this::handleView).addMessageHandler(this::handleMessage)
+          .setReconnectionFunction(this::connect)
+          .setReconnectInterval(reconnect_interval)
           .start();
     }
 
     public void start() throws Exception {
         super.start();
-        if(marshaller == null)
-            throw new IllegalStateException("marshaller must not be null");
+       // if(marshaller == null)
+         //   throw new IllegalStateException("marshaller must not be null");
     }
 
     public void stop() {
@@ -150,7 +165,7 @@ public class UPGRADE extends Protocol {
             client.send(req);
         }
         catch(Exception e) {
-            log.error("%s: failed sending message: %s", local_addr, e);
+            throw new RuntimeException(String.format("%s: failed sending message: %s", local_addr, e));
         }
         return null;
     }
@@ -164,8 +179,6 @@ public class UPGRADE extends Protocol {
         org.jgroups.upgrade_server.Address addr=jgroupsAddressToProtobufAddress(local_addr);
         client.disconnect(cluster, addr);
     }
-
-
 
     protected void handleView(View view) {
         org.jgroups.View jg_view=protobufViewToJGroupsView(view);
@@ -205,7 +218,7 @@ public class UPGRADE extends Protocol {
             is_rsp=hdr.type == RequestCorrelator.Header.RSP || hdr.type == RequestCorrelator.Header.EXC_RSP;
         }
         org.jgroups.common.ByteArray payload;
-        if(is_rsp || rpcs) {
+        if((is_rsp || rpcs) && marshaller != null) {
             Object obj=jg_msg.getPayload();
             payload=marshaller.objectToBuffer(obj);
         }
@@ -234,7 +247,7 @@ public class UPGRADE extends Protocol {
         }
         if(!payload.isEmpty()) {
             byte[] tmp=payload.toByteArray();
-            if(is_rsp || rpcs) {
+            if((is_rsp || rpcs) && marshaller != null) {
                 Object obj=marshaller.objectFromBuffer(tmp, 0, tmp.length);
                 jg_msg.setPayload(obj);
             }
