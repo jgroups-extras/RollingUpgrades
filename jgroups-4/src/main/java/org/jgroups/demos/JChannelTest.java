@@ -44,6 +44,7 @@ public class JChannelTest extends ReceiverAdapter {
                 channel.send(msg);
             }
             catch(Exception e) {
+                System.err.println(e.getMessage());
             }
         }
     }

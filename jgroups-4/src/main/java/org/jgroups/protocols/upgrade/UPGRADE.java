@@ -48,6 +48,9 @@ public class UPGRADE extends Protocol {
       "If non-null and non-empty, the client will use an encrypted connection to the server")
     protected String                                    server_cert;
 
+    @Property(description="Time in ms between trying to reconnect to UpgradeServer (while disconnected)")
+    protected long                                      reconnect_interval=3000;
+
     @ManagedAttribute(description="The local address")
     protected Address                                   local_addr;
 
@@ -72,6 +75,14 @@ public class UPGRADE extends Protocol {
     public boolean    getRpcs()                {return rpcs;}
     public UPGRADE    setRpcs(boolean r)       {rpcs=r; return this;}
 
+    @ManagedAttribute(description="True if the connected to the gRPC server")
+    public boolean isConnected() {
+            return client.isConnected();
+        }
+
+    @ManagedAttribute(description="True if the reconnector is running")
+    public boolean isReconnecting() {return client.reconnectorRunning();}
+
 
     @ManagedOperation(description="Enable forwarding and receiving of messages to/from the UpgradeServer")
     public synchronized void activate() {
@@ -93,13 +104,15 @@ public class UPGRADE extends Protocol {
         super.init();
         client.setServerAddress(server_address).setServerPort(server_port).setServerCert(server_cert)
           .addViewHandler(this::handleView).addMessageHandler(this::handleMessage)
+          .setReconnectionFunction(this::connect)
+          .setReconnectInterval(reconnect_interval)
           .start();
     }
 
     public void start() throws Exception {
         super.start();
-        if(marshaller == null)
-            throw new IllegalStateException("marshaller must not be null");
+        // if(marshaller == null)
+        //   throw new IllegalStateException("marshaller must not be null");
     }
 
     public void stop() {
@@ -154,7 +167,7 @@ public class UPGRADE extends Protocol {
             client.send(req);
         }
         catch(Exception e) {
-            log.error("%s: failed sending message: %s", local_addr, e);
+            throw new RuntimeException(String.format("%s: failed sending message: %s", local_addr, e));
         }
         return null;
     }
