@@ -1,3 +1,3 @@
 #!/bin/bash
 
-./run.sh jgroups-5 org.jgroups.demos.MessageDispatcherTest -name 5
+./run.sh jgroups-5 org.jgroups.demos.MessageDispatcherTest -props config.xml -name 5 $*

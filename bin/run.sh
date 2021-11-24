@@ -3,14 +3,18 @@
 ## Script to run a demo
 ## Parameter $1: JGroups directory
 ## Parameter $2: classname
+## Rest: additional parameters
 
 
-DIR=`dirname $0`
+DIR=`dirname $1`
 RELAY_DIR="$DIR/../$1"
+CP=$RELAY_DIR/target/classes:$RELAY_DIR/target/lib/*
 
-JGROUPS_VERSION=`cd $RELAY_DIR && mvn exec:java -Dexec.mainClass=org.jgroups.Version|grep Version:`
+shift
+EXECUTABLE=$1
+shift
 
-echo "Running $2 in $1 ($JGROUPS_VERSION)"
+JGROUPS_VERSION=`java -cp $CP org.jgroups.Version | grep 'Version:'`
+echo "Running: $EXECUTABLE, $JGROUPS_VERSION, args: $@"
 
-cd $RELAY_DIR && mvn $SYSPROPS exec:java -Dexec.mainClass=$2 \
- -Dexec.args="-props config.xml"
+java $SYSPROPS -cp $CP $EXECUTABLE $@

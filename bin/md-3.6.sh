@@ -1,4 +1,4 @@
 #!/bin/bash
 
 
-./run.sh jgroups-36 org.jgroups.demos.MessageDispatcherTest -name 3
+./run.sh jgroups-36 org.jgroups.demos.MessageDispatcherTest -props config.xml -name 3 $*

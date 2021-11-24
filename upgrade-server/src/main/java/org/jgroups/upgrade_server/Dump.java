@@ -36,7 +36,7 @@ public class Dump {
                 continue;
             }
             if(args[i].equals("-port")) {
-                port=Integer.valueOf(args[++i]);
+                port=Integer.parseInt(args[++i]);
                 continue;
             }
             System.out.println("Dump [-host host] -port port] [-h]");
