@@ -2,10 +2,10 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>org.jgroups.rolling-upgrades</groupId>
-    <artifactId>parent</artifactId>
+    <artifactId>jgroups-upgrade-parent</artifactId>
     <version>1.1.1.Final-SNAPSHOT</version>
     <packaging>pom</packaging>
-    <name>RollingUpgrades</name>
+    <name>JGroups Rolling Upgrades Parent</name>
     <url>https://github.com/jgroups-extras/RollingUpgrades</url>
 
     <modules>
