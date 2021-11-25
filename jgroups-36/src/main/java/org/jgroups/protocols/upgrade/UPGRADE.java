@@ -215,6 +215,7 @@ public class UPGRADE extends Protocol {
             msg_builder.setDestination(jgroupsAddressToProtobufAddress(destination));
         if(sender != null)
             msg_builder.setSender(jgroupsAddressToProtobufAddress(sender));
+        msg_builder.setFlags(jgroups_msg.getFlags());
         if(payload != null)
             msg_builder.setPayload(ByteString.copyFrom(payload));
         if(hdr != null) {
@@ -230,6 +231,7 @@ public class UPGRADE extends Protocol {
             jgroups_mgs.setDest(protobufAddressToJGroupsAddress(msg.getDestination()));
         if(msg.hasSender())
             jgroups_mgs.setSrc(protobufAddressToJGroupsAddress(msg.getSender()));
+        jgroups_mgs.setFlag((short)msg.getFlags());
         ByteString payload=msg.getPayload();
         if(!payload.isEmpty())
             jgroups_mgs.setBuffer(payload.toByteArray());

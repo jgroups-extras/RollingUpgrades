@@ -212,6 +212,7 @@ public class UPGRADE extends Protocol {
             builder.setDestination(jgroupsAddressToProtobufAddress(destination));
         if(sender != null)
             builder.setSender(jgroupsAddressToProtobufAddress(sender));
+        builder.setFlags(jg_msg.getFlags());
 
         boolean is_rsp=false;
         if(hdr != null) {
@@ -245,6 +246,7 @@ public class UPGRADE extends Protocol {
             jg_msg.setDest(protobufAddressToJGroupsAddress(msg.getDestination()));
         if(msg.hasSender())
             jg_msg.setSrc(protobufAddressToJGroupsAddress(msg.getSender()));
+        jg_msg.setFlag(jg_msg.getFlags());
         boolean is_rsp=false;
         if(msg.hasRpcHeader()) {
             RpcHeader pb_hdr=msg.getRpcHeader();

@@ -208,6 +208,7 @@ public class UPGRADE extends Protocol {
             builder.setDestination(jgroupsAddressToProtobufAddress(destination));
         if(sender != null)
             builder.setSender(jgroupsAddressToProtobufAddress(sender));
+        builder.setFlags(jg_msg.getFlags());
         Metadata md=Metadata.newBuilder().setMsgType(jg_msg.getType()).build();
         builder.setMetaData(md);
 
@@ -238,6 +239,7 @@ public class UPGRADE extends Protocol {
             jg_msg.setDest(protobufAddressToJGroupsAddress(msg.getDestination()));
         if(msg.hasSender())
             jg_msg.setSrc(protobufAddressToJGroupsAddress(msg.getSender()));
+        jg_msg.setFlag((short)msg.getFlags(), false);
         boolean is_rsp=false;
         if(msg.hasRpcHeader()) {
             RpcHeader pb_hdr=msg.getRpcHeader();
