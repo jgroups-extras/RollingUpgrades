@@ -10,6 +10,7 @@
 
     <modules>
         <module>common</module>
+        <module>base</module>
         <module>upgrade-server</module>
         <module>jgroups-36</module>
         <module>jgroups-4</module>
