@@ -27,6 +27,13 @@
       </dependency>
 
       <dependency>
+         <groupId>org.jgroups.rolling-upgrades</groupId>
+         <artifactId>jgroups-upgrade-base</artifactId>
+         <version>${project.version}</version>
+      </dependency>
+
+
+      <dependency>
          <groupId>org.jgroups</groupId>
          <artifactId>jgroups</artifactId>
          <version>${version.jgroups}</version>

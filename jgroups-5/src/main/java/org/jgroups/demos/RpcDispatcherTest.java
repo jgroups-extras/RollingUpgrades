@@ -115,7 +115,7 @@ public class RpcDispatcherTest {
     protected static void useRpcs(JChannel ch, boolean v) {
         UPGRADE upgrade=ch.getProtocolStack().findProtocol(UPGRADE.class);
         if(upgrade != null)
-            upgrade.rpcs(v);
+            upgrade.setRpcs(v);
         else
             log.warn("%s not found", UPGRADE.class.getSimpleName());
     }
