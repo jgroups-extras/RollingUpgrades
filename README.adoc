@@ -9,6 +9,11 @@ Upgrading a cluster to a new version is critical for some customers, who cannot 
 The design is influenced by how Kubernetes applies a new configuration: it adds a new pod, running with the new
 configuration, then kills off an existing one, until all existing pods have been replaced.
 
+[NOTE]
+JGroups versions 4 and 5 of `UPGRADE` extend a common base class `UpgradeBase`. This is not the
+case for version 3, which is not supported from Dec 2021 onwards.
+
+
 == Overview
 
 Say we have a cluster `{A1,A2,A3}`. A rolling upgrade might proceed as follows:
