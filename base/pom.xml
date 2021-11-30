@@ -24,6 +24,7 @@
             <groupId>org.jgroups</groupId>
             <artifactId>jgroups</artifactId>
             <version>4.2.16.Final</version>
+            <scope>provided</scope>
         </dependency>
     </dependencies>
 
