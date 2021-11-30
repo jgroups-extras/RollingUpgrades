@@ -10,6 +10,7 @@ import org.jgroups.common.ByteArray;
 import org.jgroups.upgrade_server.Metadata;
 import org.jgroups.upgrade_server.Request;
 import org.jgroups.upgrade_server.RpcHeader;
+import org.jgroups.util.Util;
 
 /**
  * Relays application messages to the UpgradeServer (when active). Should be the top protocol in a stack.
@@ -65,8 +66,14 @@ public class UPGRADE extends UpgradeBase {
             Object obj=jg_msg.getPayload();
             payload=marshaller.objectToBuffer(obj);
         }
-        else
-            payload=new ByteArray(jg_msg.getArray(), jg_msg.getOffset(), jg_msg.getLength());
+        else {
+            if(jg_msg.hasArray())
+                payload=new ByteArray(jg_msg.getArray(), jg_msg.getOffset(), jg_msg.getLength());
+            else {
+                org.jgroups.util.ByteArray pl=Util.objectToBuffer(jg_msg.getObject());
+                payload=pl != null? new ByteArray(pl.getArray(), pl.getOffset(), pl.getLength()) : null;
+            }
+        }
         if(payload != null)
             builder.setPayload(ByteString.copyFrom(payload.getBytes(), payload.getOffset(), payload.getLength()));
         return builder.build();
@@ -95,8 +102,14 @@ public class UPGRADE extends UpgradeBase {
                 Object obj=marshaller.objectFromBuffer(tmp, 0, tmp.length);
                 jg_msg.setPayload(obj);
             }
-            else
-                jg_msg.setArray(tmp);
+            else {
+                if(jg_msg.hasArray())
+                    jg_msg.setArray(tmp);
+                else {
+                    Object pl=Util.objectFromByteBuffer(tmp);
+                    jg_msg.setObject(pl);
+                }
+            }
         }
         return jg_msg;
     }

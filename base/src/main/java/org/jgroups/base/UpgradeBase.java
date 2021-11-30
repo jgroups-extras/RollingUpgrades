@@ -12,6 +12,8 @@ import org.jgroups.blocks.RequestCorrelator;
 import org.jgroups.common.GrpcClient;
 import org.jgroups.common.Marshaller;
 import org.jgroups.conf.ClassConfigurator;
+import org.jgroups.protocols.relay.SiteMaster;
+import org.jgroups.protocols.relay.SiteUUID;
 import org.jgroups.stack.Protocol;
 import org.jgroups.upgrade_server.RpcHeader;
 import org.jgroups.util.NameCache;
@@ -215,25 +217,52 @@ public abstract class UpgradeBase extends Protocol {
         UUID uuid=(UUID)jgroups_addr;
         String name=NameCache.get(jgroups_addr);
 
+        org.jgroups.upgrade_server.Address.Builder addr_builder=org.jgroups.upgrade_server.Address.newBuilder();
         org.jgroups.upgrade_server.UUID pbuf_uuid=org.jgroups.upgrade_server.UUID.newBuilder()
           .setLeastSig(uuid.getLeastSignificantBits()).setMostSig(uuid.getMostSignificantBits()).build();
-        org.jgroups.upgrade_server.Address.Builder builder=org.jgroups.upgrade_server.Address.newBuilder()
-          .setUuid(pbuf_uuid);
+
+        if(jgroups_addr instanceof SiteUUID || jgroups_addr instanceof SiteMaster) {
+            String site_name=((SiteUUID)jgroups_addr).getSite();
+            org.jgroups.upgrade_server.SiteUUID.Builder b=org.jgroups.upgrade_server.SiteUUID.newBuilder().
+              setUuid(pbuf_uuid);
+            if(site_name != null)
+                b.setSiteName(site_name);
+            if(jgroups_addr instanceof SiteMaster)
+                b.setIsSiteMaster(true);
+            addr_builder.setSiteUuid(b.build());
+        }
+        else {
+            addr_builder.setUuid(pbuf_uuid);
+        }
         if(name != null)
-            builder.setName(name);
-        return builder.build();
+            addr_builder.setName(name);
+        return addr_builder.build();
     }
 
     protected static Address protobufAddressToJGroupsAddress(org.jgroups.upgrade_server.Address pbuf_addr) {
         if(pbuf_addr == null)
             return null;
-        org.jgroups.upgrade_server.UUID pbuf_uuid=pbuf_addr.hasUuid()? pbuf_addr.getUuid() : null;
 
-        UUID uuid=pbuf_uuid == null? null : new UUID(pbuf_uuid.getMostSig(), pbuf_uuid.getLeastSig());
         String logical_name=pbuf_addr.getName();
-        if(uuid != null && logical_name != null && !logical_name.isEmpty())
-            NameCache.add(uuid, logical_name);
-        return uuid;
+        Address retval=null;
+        if(pbuf_addr.hasSiteUuid()) {
+            org.jgroups.upgrade_server.SiteUUID pbuf_site_uuid=pbuf_addr.getSiteUuid();
+            String site_name=pbuf_site_uuid.getSiteName();
+            if(pbuf_site_uuid.getIsSiteMaster())
+                retval=new SiteMaster(site_name);
+            else {
+                long least=pbuf_site_uuid.getUuid().getLeastSig(), most=pbuf_site_uuid.getUuid().getMostSig();
+                retval=new SiteUUID(most, least, logical_name, site_name);
+            }
+        }
+        else if(pbuf_addr.hasUuid()) {
+            org.jgroups.upgrade_server.UUID pbuf_uuid=pbuf_addr.getUuid();
+            retval=new UUID(pbuf_uuid.getMostSig(), pbuf_uuid.getLeastSig());
+        }
+
+        if(retval != null && logical_name != null && !logical_name.isEmpty())
+            NameCache.add(retval, logical_name);
+        return retval;
     }
 
 
