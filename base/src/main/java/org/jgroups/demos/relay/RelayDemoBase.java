@@ -1,5 +1,6 @@
 package org.jgroups.demos.relay;
 
+import com.sun.xml.internal.rngom.parse.host.Base;
 import org.jgroups.Address;
 import org.jgroups.JChannel;
 import org.jgroups.Message;
@@ -18,8 +19,6 @@ public abstract class RelayDemoBase {
 
     protected JChannel ch;
     protected RELAY2   relay;
-
-
 
 
     public void receive(Message msg) {

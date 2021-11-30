@@ -12,43 +12,12 @@ import org.jgroups.Receiver;
  */
 public class RelayDemo extends RelayDemoBase implements Receiver {
 
-    public static void main(String[] args) throws Exception {
-        String props="udp.xml";
-        String name=null;
-        boolean print_route_status=false, nohup=false;
-
-        for(int i=0; i < args.length; i++) {
-            if(args[i].equals("-props")) {
-                props=args[++i];
-                continue;
-            }
-            if(args[i].equals("-name")) {
-                name=args[++i];
-                continue;
-            }
-            if(args[i].equals("-print_route_status")) {
-                print_route_status=Boolean.parseBoolean(args[++i]);
-                continue;
-            }
-            if(args[i].equals("-nohup")) {
-                nohup=true;
-                continue;
-            }
-            System.out.println("RelayDemo [-props props] [-name name] [-print_route_status false|true] [-nohup]");
-            return;
-        }
-        RelayDemo demo=new RelayDemo();
-        demo.start(props, name, print_route_status, nohup);
-    }
-
-    @Override
-    protected void init(JChannel ch) {
-        ch.setReceiver(this);
-    }
-
     public Message createMessage(Address dest, String payload) {
         return new Message(dest, payload);
     }
 
-
+    @Override
+       protected void init(JChannel ch) {
+           ch.setReceiver(this);
+    }
 }

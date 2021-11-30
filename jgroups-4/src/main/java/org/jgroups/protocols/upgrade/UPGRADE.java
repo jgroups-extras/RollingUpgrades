@@ -162,9 +162,7 @@ public class UPGRADE extends UpgradeBase {
 
     private static org.jgroups.common.ByteArray payloadFromJGroupsMessage(Message jg_msg) {
         byte[] raw_buf = jg_msg.getRawBuffer();
-        return raw_buf == null ?
-              null :
-              new ByteArray(jg_msg.getRawBuffer(), jg_msg.getOffset(), jg_msg.getLength());
+        return raw_buf == null ? null : new ByteArray(jg_msg.getRawBuffer(), jg_msg.getOffset(), jg_msg.getLength());
     }
 
 }
