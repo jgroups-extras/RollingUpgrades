@@ -15,7 +15,7 @@
    <description>JGroups 4.x UPGRADE protocol for Rolling Upgrades</description>
 
    <properties>
-      <version.jgroups>4.2.12.Final</version.jgroups>
+      <version.jgroups>4.2.18.Final-SNAPSHOT</version.jgroups>
    </properties>
 
    <dependencies>

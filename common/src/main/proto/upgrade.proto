@@ -20,7 +20,7 @@ message Message {
     Address   sender       = 3;
     int32     flags        = 4;
     bytes     payload      = 5;
-    RpcHeader rpc_header   = 6; // if the message is an RPC, otherwise this field will be null
+    Headers   headers      = 6; // if the message is an RPC, otherwise this field will be null
     Metadata  meta_data    = 7; // metadata (may be null)
 }
 
@@ -96,6 +96,27 @@ message RpcHeader {
     int64            request_id     = 2;
     int32            corr_id        = 3;
     repeated Address exclusion_list = 4;
+}
+
+message RelayHeader {
+    enum Type {
+        DATA             = 0;
+        SITE_UNREACHABLE = 1; // final_dest is a SiteMaster
+        HOST_UNREACHABLE = 2; // final_dest is a SiteUUID (not currently used)
+        SITES_UP         = 3;
+        SITES_DOWN       = 4;
+        TOPO_REQ         = 5;
+        TOPO_RSP         = 6;
+    }
+    Type             type            = 1;
+    Address          final_dest      = 2;
+    Address          original_sender = 3;
+    repeated string  sites           = 4;
+}
+
+message Headers {
+    RpcHeader   rpc_hdr   = 1;
+    RelayHeader relay_hdr = 2;
 }
 
 message Metadata {

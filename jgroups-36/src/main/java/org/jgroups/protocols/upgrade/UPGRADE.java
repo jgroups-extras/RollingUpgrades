@@ -12,10 +12,7 @@ import org.jgroups.blocks.RequestCorrelator;
 import org.jgroups.common.GrpcClient;
 import org.jgroups.conf.ClassConfigurator;
 import org.jgroups.stack.Protocol;
-import org.jgroups.upgrade_server.Request;
-import org.jgroups.upgrade_server.RpcHeader;
-import org.jgroups.upgrade_server.View;
-import org.jgroups.upgrade_server.ViewId;
+import org.jgroups.upgrade_server.*;
 import org.jgroups.util.UUID;
 
 import java.util.ArrayList;
@@ -220,7 +217,8 @@ public class UPGRADE extends Protocol {
             msg_builder.setPayload(ByteString.copyFrom(payload));
         if(hdr != null) {
             RpcHeader pbuf_hdr=jgroupsReqHeaderToProtobufRpcHeader(hdr);
-            msg_builder.setRpcHeader(pbuf_hdr);
+            Headers hdrs=Headers.newBuilder().setRpcHdr(pbuf_hdr).build();
+            msg_builder.setHeaders(hdrs);
         }
         return msg_builder.build();
     }
@@ -235,9 +233,12 @@ public class UPGRADE extends Protocol {
         ByteString payload=msg.getPayload();
         if(!payload.isEmpty())
             jgroups_mgs.setBuffer(payload.toByteArray());
-        if(msg.hasRpcHeader()) {
-            RequestCorrelator.Header hdr=protobufRpcHeaderToJGroupsReqHeader(msg.getRpcHeader());
-            jgroups_mgs.putHeader(REQ_ID, hdr);
+        if(msg.hasHeaders()) {
+            Headers hdrs=msg.getHeaders();
+            if(hdrs.hasRpcHdr()) {
+                RequestCorrelator.Header hdr=protobufRpcHeaderToJGroupsReqHeader(hdrs.getRpcHdr());
+                jgroups_mgs.putHeader(REQ_ID, hdr);
+            }
         }
         return jgroups_mgs;
     }

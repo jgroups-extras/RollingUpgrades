@@ -7,6 +7,9 @@ import org.jgroups.annotations.MBean;
 import org.jgroups.base.UpgradeBase;
 import org.jgroups.blocks.RequestCorrelator;
 import org.jgroups.common.ByteArray;
+import org.jgroups.protocols.relay.RELAY2;
+import org.jgroups.upgrade_server.Headers;
+import org.jgroups.upgrade_server.RelayHeader;
 import org.jgroups.upgrade_server.Request;
 import org.jgroups.upgrade_server.RpcHeader;
 import org.jgroups.util.Buffer;
@@ -48,7 +51,6 @@ public class UPGRADE extends UpgradeBase {
         if(jg_msg == null)
             return null;
         Address destination=jg_msg.getDest(), sender=jg_msg.getSrc();
-        RequestCorrelator.Header hdr=jg_msg.getHeader(REQ_ID);
         org.jgroups.upgrade_server.Message.Builder builder=org.jgroups.upgrade_server.Message.newBuilder()
           .setClusterName(cluster);
         if(destination != null)
@@ -58,11 +60,20 @@ public class UPGRADE extends UpgradeBase {
         builder.setFlags(jg_msg.getFlags());
 
         boolean is_rsp=false;
+        RequestCorrelator.Header hdr=jg_msg.getHeader(REQ_ID);
+        RELAY2.Relay2Header relay_hdr=jg_msg.getHeader(RELAY2_ID);
+        Headers.Builder b=Headers.newBuilder();
         if(hdr != null) {
             RpcHeader pbuf_hdr=jgroupsReqHeaderToProtobufRpcHeader(hdr);
-            builder.setRpcHeader(pbuf_hdr);
+            b.setRpcHdr(pbuf_hdr);
             is_rsp=hdr.type == RequestCorrelator.Header.RSP || hdr.type == RequestCorrelator.Header.EXC_RSP;
         }
+        if(relay_hdr!= null) {
+            RelayHeader h=jgroupsRelayHeaderToProtobuf(relay_hdr);
+            b.setRelayHdr(h);
+        }
+        builder.setHeaders(b.build());
+
         org.jgroups.common.ByteArray payload;
         if(is_rsp) {
             Object obj=jg_msg.getObject();
@@ -73,8 +84,11 @@ public class UPGRADE extends UpgradeBase {
                 Streamable mc=methodCallFromBuffer(jg_msg.buffer(), jg_msg.getOffset(), jg_msg.getLength(), null);
                 payload=marshaller.objectToBuffer(mc);
             }
-            else
-                payload=new ByteArray(jg_msg.getRawBuffer(), jg_msg.getOffset(), jg_msg.getLength());
+            else {
+                byte[] raw_buf=jg_msg.getRawBuffer();
+                payload=raw_buf != null?
+                  new ByteArray(jg_msg.getRawBuffer(), jg_msg.getOffset(), jg_msg.getLength()) : null;
+            }
         }
         if(payload != null)
             builder.setPayload(ByteString.copyFrom(payload.getBytes(), payload.getOffset(), payload.getLength()));
@@ -91,11 +105,19 @@ public class UPGRADE extends UpgradeBase {
             jg_msg.setSrc(protobufAddressToJGroupsAddress(msg.getSender()));
         jg_msg.setFlag(jg_msg.getFlags());
         boolean is_rsp=false;
-        if(msg.hasRpcHeader()) {
-            RpcHeader pb_hdr=msg.getRpcHeader();
-            RequestCorrelator.Header hdr=protobufRpcHeaderToJGroupsReqHeader(pb_hdr);
-            jg_msg.putHeader(REQ_ID, hdr);
-            is_rsp=hdr.type == RequestCorrelator.Header.RSP || hdr.type == RequestCorrelator.Header.EXC_RSP;
+        if(msg.hasHeaders()) {
+            Headers hdrs=msg.getHeaders();
+            if(hdrs.hasRpcHdr()) {
+                RpcHeader pb_hdr=hdrs.getRpcHdr();
+                RequestCorrelator.Header hdr=protobufRpcHeaderToJGroupsReqHeader(pb_hdr);
+                jg_msg.putHeader(REQ_ID, hdr);
+                is_rsp=hdr.type == RequestCorrelator.Header.RSP || hdr.type == RequestCorrelator.Header.EXC_RSP;
+            }
+            if(hdrs.hasRelayHdr()) {
+                RelayHeader pbuf_hdr=hdrs.getRelayHdr();
+                RELAY2.Relay2Header relay_hdr=protobufRelayHeaderToJGroups(pbuf_hdr);
+                jg_msg.putHeader(RELAY2_ID, relay_hdr);
+            }
         }
         if(!payload.isEmpty()) {
             byte[] tmp=payload.toByteArray();

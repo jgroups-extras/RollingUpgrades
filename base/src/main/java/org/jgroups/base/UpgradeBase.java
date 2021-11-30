@@ -1,5 +1,6 @@
 package org.jgroups.base;
 
+import com.google.protobuf.ProtocolStringList;
 import org.jgroups.Address;
 import org.jgroups.Event;
 import org.jgroups.Message;
@@ -12,9 +13,11 @@ import org.jgroups.blocks.RequestCorrelator;
 import org.jgroups.common.GrpcClient;
 import org.jgroups.common.Marshaller;
 import org.jgroups.conf.ClassConfigurator;
+import org.jgroups.protocols.relay.RELAY2;
 import org.jgroups.protocols.relay.SiteMaster;
 import org.jgroups.protocols.relay.SiteUUID;
 import org.jgroups.stack.Protocol;
+import org.jgroups.upgrade_server.RelayHeader;
 import org.jgroups.upgrade_server.RpcHeader;
 import org.jgroups.util.NameCache;
 import org.jgroups.util.UUID;
@@ -23,6 +26,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static org.jgroups.protocols.relay.RELAY2.Relay2Header.*;
+import static org.jgroups.protocols.relay.RELAY2.Relay2Header.TOPO_RSP;
 
 /**
  * Relays application messages to the UpgradeServer (when active). Should be the top protocol in a stack.
@@ -69,6 +75,7 @@ public abstract class UpgradeBase extends Protocol {
     protected org.jgroups.common.Marshaller             marshaller;
 
     protected static final short                        REQ_ID=ClassConfigurator.getProtocolId(RequestCorrelator.class);
+    protected static final short                        RELAY2_ID=ClassConfigurator.getProtocolId(RELAY2.class);
 
     @ManagedAttribute public String getMarshaller() {
         return marshaller != null? marshaller.getClass().getSimpleName() : "n/a";
@@ -207,6 +214,82 @@ public abstract class UpgradeBase extends Protocol {
         return (RequestCorrelator.Header)new RequestCorrelator.Header(type, request_id, corr_id).setProtId(REQ_ID);
     }
 
+    protected static RelayHeader jgroupsRelayHeaderToProtobuf(RELAY2.Relay2Header jg_hdr) {
+        RelayHeader.Builder rb=RelayHeader.newBuilder();
+        switch(jg_hdr.getType()) {
+            case DATA: rb.setType(RelayHeader.Type.DATA); break;
+            case SITE_UNREACHABLE: rb.setType(RelayHeader.Type.SITE_UNREACHABLE); break;
+            case HOST_UNREACHABLE: rb.setType(RelayHeader.Type.HOST_UNREACHABLE); break;
+            case SITES_UP: rb.setType(RelayHeader.Type.SITES_UP); break;
+            case SITES_DOWN: rb.setType(RelayHeader.Type.SITES_DOWN); break;
+            case TOPO_REQ: rb.setType(RelayHeader.Type.TOPO_REQ); break;
+            case TOPO_RSP: rb.setType(RelayHeader.Type.TOPO_RSP); break;
+        }
+
+        if(jg_hdr.getFinalDest() != null) {
+            org.jgroups.upgrade_server.Address addr=jgroupsAddressToProtobufAddress(jg_hdr.getFinalDest());
+            rb.setFinalDest(addr);
+        }
+
+        if(jg_hdr.getOriginalSender() != null) {
+            org.jgroups.upgrade_server.Address addr=jgroupsAddressToProtobufAddress(jg_hdr.getOriginalSender());
+            rb.setOriginalSender(addr);
+        }
+
+        String[] sites=jg_hdr.getSites();
+        if(sites != null && sites.length > 0)
+            rb.addAllSites(Arrays.asList(sites));
+
+        return rb.build();
+    }
+
+    protected static RELAY2.Relay2Header protobufRelayHeaderToJGroups(RelayHeader pbuf_hdr) {
+        byte     type=-1;
+        Address  final_dest=null, original_sender=null;
+        String[] sites=null;
+
+        RelayHeader.Type pbuf_type=pbuf_hdr.getType();
+        switch(pbuf_type) {
+            case DATA: type=DATA;
+                break;
+            case SITE_UNREACHABLE:
+                type=SITE_UNREACHABLE;
+                break;
+            case HOST_UNREACHABLE:
+                type=HOST_UNREACHABLE;
+                break;
+            case SITES_UP:
+                type=SITES_UP;
+                break;
+            case SITES_DOWN:
+                type=SITES_DOWN;
+                break;
+            case TOPO_REQ:
+                type=TOPO_REQ;
+                break;
+            case TOPO_RSP:
+                type=TOPO_RSP;
+                break;
+            case UNRECOGNIZED:
+                throw new IllegalArgumentException("type is UNRECOGNIZED");
+        }
+        if(pbuf_hdr.hasFinalDest())
+            final_dest=protobufAddressToJGroupsAddress(pbuf_hdr.getFinalDest());
+
+        if(pbuf_hdr.hasOriginalSender())
+            original_sender=protobufAddressToJGroupsAddress(pbuf_hdr.getOriginalSender());
+        ProtocolStringList pbuf_sites=pbuf_hdr.getSitesList();
+        if(pbuf_sites != null) {
+            sites=new String[pbuf_sites.size()];
+            for(int i=0; i < sites.length; i++)
+                sites[i]=pbuf_sites.get(i);
+        }
+        RELAY2.Relay2Header hdr=new RELAY2.Relay2Header(type, final_dest, original_sender);
+        if(sites != null)
+            hdr.setSites(sites);
+        return hdr;
+    }
+
 
     protected static org.jgroups.upgrade_server.Address jgroupsAddressToProtobufAddress(Address jgroups_addr) {
         if(jgroups_addr == null)
@@ -215,7 +298,7 @@ public abstract class UpgradeBase extends Protocol {
             throw new IllegalArgumentException(String.format("JGroups address has to be of type UUID but is %s",
                                                              jgroups_addr.getClass().getSimpleName()));
         UUID uuid=(UUID)jgroups_addr;
-        String name=NameCache.get(jgroups_addr);
+        String name=jgroups_addr instanceof SiteUUID? ((SiteUUID)jgroups_addr).getName() : NameCache.get(jgroups_addr);
 
         org.jgroups.upgrade_server.Address.Builder addr_builder=org.jgroups.upgrade_server.Address.newBuilder();
         org.jgroups.upgrade_server.UUID pbuf_uuid=org.jgroups.upgrade_server.UUID.newBuilder()

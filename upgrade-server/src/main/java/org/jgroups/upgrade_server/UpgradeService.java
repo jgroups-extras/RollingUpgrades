@@ -189,10 +189,11 @@ public class UpgradeService extends UpgradeServiceGrpc.UpgradeServiceImplBase {
                 Response response=Response.newBuilder().setMessage(msg).build();
 
                 // need to honor the exclusion list in the header if present
-                RpcHeader rpcHeader = msg.getRpcHeader();
+                Headers hdrs=msg.getHeaders();
+                RpcHeader rpcHeader = hdrs != null && hdrs.hasRpcHdr()? hdrs.getRpcHdr() : null;
 
                 Set<Address> exclusions = new HashSet<>();
-                if (rpcHeader.getExclusionListList() != null && !rpcHeader.getExclusionListList().isEmpty()) {
+                if (rpcHeader != null && rpcHeader.getExclusionListList() != null && !rpcHeader.getExclusionListList().isEmpty()) {
                     exclusions.addAll(rpcHeader.getExclusionListList());
                 }
 
