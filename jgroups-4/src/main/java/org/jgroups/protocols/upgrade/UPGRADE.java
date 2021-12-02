@@ -75,20 +75,18 @@ public class UPGRADE extends UpgradeBase {
         builder.setHeaders(b.build());
 
         org.jgroups.common.ByteArray payload;
-        if(is_rsp) {
-            Object obj=jg_msg.getObject();
-            payload=marshaller.objectToBuffer(obj);
-        }
-        else {
-            if(rpcs) {
+        if (marshaller != null) {
+            if(is_rsp) {
+                Object obj=jg_msg.getObject();
+                payload=marshaller.objectToBuffer(obj);
+            } else if (rpcs) {
                 Streamable mc=methodCallFromBuffer(jg_msg.buffer(), jg_msg.getOffset(), jg_msg.getLength(), null);
                 payload=marshaller.objectToBuffer(mc);
+            } else {
+                payload = payloadFromJGroupsMessage(jg_msg);
             }
-            else {
-                byte[] raw_buf=jg_msg.getRawBuffer();
-                payload=raw_buf != null?
-                  new ByteArray(jg_msg.getRawBuffer(), jg_msg.getOffset(), jg_msg.getLength()) : null;
-            }
+        } else {
+            payload = payloadFromJGroupsMessage(jg_msg);
         }
         if(payload != null)
             builder.setPayload(ByteString.copyFrom(payload.getBytes(), payload.getOffset(), payload.getLength()));
@@ -119,22 +117,26 @@ public class UPGRADE extends UpgradeBase {
                 jg_msg.putHeader(RELAY2_ID, relay_hdr);
             }
         }
-        if(!payload.isEmpty()) {
-            byte[] tmp=payload.toByteArray();
-            if(is_rsp) {
-                Object obj=marshaller.objectFromBuffer(tmp, 0, tmp.length);
-                jg_msg.setObject(obj);
-            }
-            else {
-                if(rpcs) {
-                    org.jgroups.blocks.MethodCall obj=(org.jgroups.blocks.MethodCall)marshaller.objectFromBuffer(tmp, 0, tmp.length);
-                    Buffer buf=methodCallToBuffer(obj, null);
-                    jg_msg.setBuffer(buf);
-                }
-                else
-                    jg_msg.setBuffer(tmp);
-            }
+        if  (payload.isEmpty()) {
+            return jg_msg;
         }
+
+        byte[] tmp = payload.toByteArray();
+        if (marshaller != null) {
+            if (is_rsp) {
+                Object obj = marshaller.objectFromBuffer(tmp, 0, tmp.length);
+                jg_msg.setObject(obj);
+            } else if (rpcs) {
+                org.jgroups.blocks.MethodCall obj = (org.jgroups.blocks.MethodCall) marshaller.objectFromBuffer(tmp, 0, tmp.length);
+                Buffer buf = methodCallToBuffer(obj, null);
+                jg_msg.setBuffer(buf);
+            } else {
+                jg_msg.setBuffer(tmp);
+            }
+        } else {
+            jg_msg.setBuffer(tmp);
+        }
+
         return jg_msg;
     }
 
@@ -158,6 +160,11 @@ public class UPGRADE extends UpgradeBase {
         return call;
     }
 
-
+    private static org.jgroups.common.ByteArray payloadFromJGroupsMessage(Message jg_msg) {
+        byte[] raw_buf = jg_msg.getRawBuffer();
+        return raw_buf == null ?
+              null :
+              new ByteArray(jg_msg.getRawBuffer(), jg_msg.getOffset(), jg_msg.getLength());
+    }
 
 }
