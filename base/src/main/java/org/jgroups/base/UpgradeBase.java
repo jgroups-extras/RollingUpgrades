@@ -17,9 +17,7 @@ import org.jgroups.protocols.relay.RELAY2;
 import org.jgroups.protocols.relay.SiteMaster;
 import org.jgroups.protocols.relay.SiteUUID;
 import org.jgroups.stack.Protocol;
-import org.jgroups.upgrade_server.RelayHeader;
-import org.jgroups.upgrade_server.Request;
-import org.jgroups.upgrade_server.RpcHeader;
+import org.jgroups.upgrade_server.*;
 import org.jgroups.util.NameCache;
 import org.jgroups.util.UUID;
 
@@ -29,7 +27,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.jgroups.protocols.relay.RELAY2.Relay2Header.*;
-import static org.jgroups.protocols.relay.RELAY2.Relay2Header.TOPO_RSP;
 
 /**
  * Relays application messages to the UpgradeServer (when active). Should be the top protocol in a stack.
@@ -40,52 +37,66 @@ import static org.jgroups.protocols.relay.RELAY2.Relay2Header.TOPO_RSP;
  */
 @MBean(description="Protocol that redirects all messages to/from an UpgradeServer")
 public abstract class UpgradeBase extends Protocol {
-    @Property(description="Whether or not to perform relaying via the UpgradeServer",writable=false)
-    protected volatile boolean                          active;
+    @Property(description="Whether or not to perform relaying via the UpgradeServer", writable=false)
+    protected volatile boolean active;
 
     @Property(description="The IP address (or symbolic name) of the UpgradeServer")
-    protected String                                    server_address="localhost";
+    protected String server_address="localhost";
 
     @Property(description="The port on which the UpgradeServer is listening")
-    protected int                                       server_port=50051;
+    protected int server_port=50051;
 
     @Property(description="The filename of the UpgradeServer's certificate (with the server's public key). " +
       "If non-null and non-empty, the client will use an encrypted connection to the server")
-    protected String                                    server_cert;
+    protected String server_cert;
 
     @Property(description="Time in ms between trying to reconnect to UpgradeServer (while disconnected)")
-    protected long                                      reconnect_interval=3000;
+    protected long reconnect_interval=3000;
 
     @ManagedAttribute(description="The local address")
-    protected Address                                   local_addr;
+    protected Address local_addr;
 
     @ManagedAttribute(description="Shows the local view")
-    protected org.jgroups.View                          local_view;
+    protected org.jgroups.View local_view;
 
     @ManagedAttribute(description="The global view (provided by the UpgradeServer)")
-    protected org.jgroups.View                          global_view;
+    protected org.jgroups.View global_view;
 
     @Property(description="If RPCs are sent over UPGRADE, then we must serialize every request, not just the responses")
-    protected boolean                                   rpcs;
+    protected boolean rpcs;
 
     @ManagedAttribute(description="The cluster this member is a part of")
-    protected String                                    cluster;
+    protected String cluster;
 
-    protected GrpcClient                                client=new GrpcClient();
+    protected GrpcClient client=new GrpcClient();
 
-    protected org.jgroups.common.Marshaller             marshaller;
+    protected org.jgroups.common.Marshaller marshaller;
 
-    protected static final short                        REQ_ID=ClassConfigurator.getProtocolId(RequestCorrelator.class);
-    protected static final short                        RELAY2_ID=ClassConfigurator.getProtocolId(RELAY2.class);
+    protected static final short REQ_ID=ClassConfigurator.getProtocolId(RequestCorrelator.class);
+    protected static final short RELAY2_ID=ClassConfigurator.getProtocolId(RELAY2.class);
 
-    @ManagedAttribute public String getMarshaller() {
+    @ManagedAttribute
+    public String getMarshaller() {
         return marshaller != null? marshaller.getClass().getSimpleName() : "n/a";
     }
 
-    public Marshaller                  marshaller()             {return marshaller;}
-    public <T extends UpgradeBase> T   marshaller(Marshaller m) {this.marshaller=m; return (T)this;}
-    public boolean                     getRpcs()                {return rpcs;}
-    public <T extends UpgradeBase> T   setRpcs(boolean r)       {rpcs=r; return (T)this;}
+    public Marshaller marshaller() {
+        return marshaller;
+    }
+
+    public <T extends UpgradeBase> T marshaller(Marshaller m) {
+        this.marshaller=m;
+        return (T)this;
+    }
+
+    public boolean getRpcs() {
+        return rpcs;
+    }
+
+    public <T extends UpgradeBase> T setRpcs(boolean r) {
+        rpcs=r;
+        return (T)this;
+    }
 
 
     @ManagedAttribute(description="True if the connected to the gRPC server")
@@ -94,7 +105,9 @@ public abstract class UpgradeBase extends Protocol {
     }
 
     @ManagedAttribute(description="True if the reconnector is running")
-    public boolean isReconnecting() {return client.reconnectorRunning();}
+    public boolean isReconnecting() {
+        return client.reconnectorRunning();
+    }
 
 
     public void init() throws Exception {
@@ -105,7 +118,6 @@ public abstract class UpgradeBase extends Protocol {
           .setReconnectInterval(reconnect_interval)
           .start();
     }
-
 
 
     public void stop() {
@@ -180,7 +192,6 @@ public abstract class UpgradeBase extends Protocol {
     }
 
 
-
     protected void connect() {
         org.jgroups.upgrade_server.Address addr=jgroupsAddressToProtobufAddress(local_addr);
         client.connect(cluster, addr);
@@ -205,6 +216,37 @@ public abstract class UpgradeBase extends Protocol {
         catch(Exception e) {
             log.error("%s: failed reading message: %s", local_addr, e);
         }
+    }
+
+    protected static org.jgroups.upgrade_server.Message.Builder msgBuilder(String cluster, Address src, Address dest,
+                                                                           short flags, Metadata md) {
+        org.jgroups.upgrade_server.Message.Builder builder=org.jgroups.upgrade_server.Message.newBuilder()
+          .setClusterName(cluster);
+        if(dest !=null)
+            builder.setDestination(jgroupsAddressToProtobufAddress(dest));
+        if(src != null)
+            builder.setSender(jgroupsAddressToProtobufAddress(src));
+        if(md != null)
+            builder.setMetaData(md);
+        return builder.setFlags(flags);
+    }
+
+    protected static boolean setHeaders(org.jgroups.upgrade_server.Message.Builder builder,
+                                        RequestCorrelator.Header req_hdr,
+                                        RELAY2.Relay2Header relay_hdr) {
+        boolean is_rsp=false;
+        Headers.Builder hdr_builder=Headers.newBuilder();
+        if(req_hdr != null) {
+            RpcHeader pbuf_hdr=jgroupsReqHeaderToProtobufRpcHeader(req_hdr);
+            hdr_builder.setRpcHdr(pbuf_hdr);
+            is_rsp=req_hdr.type == RequestCorrelator.Header.RSP || req_hdr.type == RequestCorrelator.Header.EXC_RSP;
+        }
+        if(relay_hdr!= null) {
+            RelayHeader h=jgroupsRelayHeaderToProtobuf(relay_hdr);
+            hdr_builder.setRelayHdr(h);
+        }
+        builder.setHeaders(hdr_builder.build());
+        return is_rsp;
     }
 
     protected abstract org.jgroups.upgrade_server.Message jgroupsMessageToProtobufMessage(String cluster, Message jg_msg)

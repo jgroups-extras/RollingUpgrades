@@ -1,7 +1,6 @@
 package org.jgroups.protocols.upgrade;
 
 import com.google.protobuf.ByteString;
-import org.jgroups.Address;
 import org.jgroups.Message;
 import org.jgroups.annotations.MBean;
 import org.jgroups.base.UpgradeBase;
@@ -28,29 +27,12 @@ public class UPGRADE extends UpgradeBase {
     protected org.jgroups.upgrade_server.Message jgroupsMessageToProtobufMessage(String cluster, Message jg_msg) throws Exception {
         if(jg_msg == null)
             return null;
-        Address destination=jg_msg.getDest(), sender=jg_msg.getSrc();
-        org.jgroups.upgrade_server.Message.Builder builder=org.jgroups.upgrade_server.Message.newBuilder()
-          .setClusterName(cluster);
-        if(destination != null)
-            builder.setDestination(jgroupsAddressToProtobufAddress(destination));
-        if(sender != null)
-            builder.setSender(jgroupsAddressToProtobufAddress(sender));
-        builder.setFlags(jg_msg.getFlags());
 
-        boolean is_rsp=false;
+        org.jgroups.upgrade_server.Message.Builder builder=msgBuilder(cluster, jg_msg.getSrc(), jg_msg.getDest(),
+                                                                      jg_msg.getFlags(), null);
         RequestCorrelator.Header hdr=jg_msg.getHeader(REQ_ID);
         RELAY2.Relay2Header relay_hdr=jg_msg.getHeader(RELAY2_ID);
-        Headers.Builder b=Headers.newBuilder();
-        if(hdr != null) {
-            RpcHeader pbuf_hdr=jgroupsReqHeaderToProtobufRpcHeader(hdr);
-            b.setRpcHdr(pbuf_hdr);
-            is_rsp=hdr.type == RequestCorrelator.Header.RSP || hdr.type == RequestCorrelator.Header.EXC_RSP;
-        }
-        if(relay_hdr!= null) {
-            RelayHeader h=jgroupsRelayHeaderToProtobuf(relay_hdr);
-            b.setRelayHdr(h);
-        }
-        builder.setHeaders(b.build());
+        boolean is_rsp=setHeaders(builder, hdr, relay_hdr);
 
         org.jgroups.common.ByteArray payload;
         if (marshaller != null) {
@@ -70,6 +52,7 @@ public class UPGRADE extends UpgradeBase {
             builder.setPayload(ByteString.copyFrom(payload.getBytes(), payload.getOffset(), payload.getLength()));
         return builder.build();
     }
+
 
 
     protected Message protobufMessageToJGroupsMessage(org.jgroups.upgrade_server.Message msg) throws Exception {
