@@ -15,8 +15,6 @@ import org.jgroups.util.Util;
  * Relays application messages to the UpgradeServer (when active). Should be the top protocol in a stack.
  * @author Bela Ban
  * @since  1.0
- * @todo: implement support for addresses other than UUIDs
- * @todo: implement reconnection to server (server went down and then up again)
  */
 public class UPGRADE extends UpgradeBase {
 
