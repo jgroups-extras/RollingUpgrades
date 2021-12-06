@@ -41,36 +41,36 @@ public abstract class UpgradeBase extends Protocol {
     protected volatile boolean active;
 
     @Property(description="The IP address (or symbolic name) of the UpgradeServer")
-    protected String server_address="localhost";
+    protected String             server_address="localhost";
 
     @Property(description="The port on which the UpgradeServer is listening")
-    protected int server_port=50051;
+    protected int                server_port=50051;
 
     @Property(description="The filename of the UpgradeServer's certificate (with the server's public key). " +
       "If non-null and non-empty, the client will use an encrypted connection to the server")
-    protected String server_cert;
+    protected String             server_cert;
 
     @Property(description="Time in ms between trying to reconnect to UpgradeServer (while disconnected)")
-    protected long reconnect_interval=3000;
+    protected long               reconnect_interval=3000;
 
     @ManagedAttribute(description="The local address")
-    protected Address local_addr;
+    protected Address            local_addr;
 
     @ManagedAttribute(description="Shows the local view")
-    protected org.jgroups.View local_view;
+    protected View               local_view;
 
     @ManagedAttribute(description="The global view (provided by the UpgradeServer)")
-    protected org.jgroups.View global_view;
+    protected View               global_view;
 
     @Property(description="If RPCs are sent over UPGRADE, then we must serialize every request, not just the responses")
-    protected boolean rpcs;
+    protected boolean            rpcs;
 
     @ManagedAttribute(description="The cluster this member is a part of")
-    protected String cluster;
+    protected String             cluster;
 
-    protected GrpcClient client=new GrpcClient();
+    protected GrpcClient         client=new GrpcClient();
 
-    protected org.jgroups.common.Marshaller marshaller;
+    protected Marshaller         marshaller;
 
     protected static final short REQ_ID=ClassConfigurator.getProtocolId(RequestCorrelator.class);
     protected static final short RELAY2_ID=ClassConfigurator.getProtocolId(RELAY2.class);
@@ -194,17 +194,20 @@ public abstract class UpgradeBase extends Protocol {
 
     protected void connect() {
         org.jgroups.upgrade_server.Address addr=jgroupsAddressToProtobufAddress(local_addr);
+        log.debug("%s: joining cluster %s", local_addr, cluster);
         client.connect(cluster, addr);
     }
 
     protected void disconnect() {
         org.jgroups.upgrade_server.Address addr=jgroupsAddressToProtobufAddress(local_addr);
+        log.debug("%s: leaving cluster %s", local_addr, cluster);
         client.disconnect(cluster, addr);
     }
 
     protected void handleView(org.jgroups.upgrade_server.View view) {
         View jg_view=protobufViewToJGroupsView(view);
         global_view=jg_view;
+        log.debug("%s: received new global view %s", local_view, global_view);
         up_prot.up(new Event(Event.VIEW_CHANGE, jg_view));
     }
 
