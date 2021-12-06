@@ -10,7 +10,6 @@ import org.jgroups.common.ByteArray;
 import org.jgroups.protocols.relay.RELAY2;
 import org.jgroups.upgrade_server.Headers;
 import org.jgroups.upgrade_server.RelayHeader;
-import org.jgroups.upgrade_server.Request;
 import org.jgroups.upgrade_server.RpcHeader;
 import org.jgroups.util.Buffer;
 import org.jgroups.util.ByteArrayDataInputStream;
@@ -26,25 +25,6 @@ import org.jgroups.util.Streamable;
  */
 @MBean(description="Protocol that redirects all messages to/from an UpgradeServer")
 public class UPGRADE extends UpgradeBase {
-
-
-    public Object down(Message msg) {
-        if(!active)
-            return down_prot.down(msg);
-
-        // else send to UpgradeServer
-        if(msg.getSrc() == null)
-            msg.setSrc(local_addr);
-        try {
-            org.jgroups.upgrade_server.Message m=jgroupsMessageToProtobufMessage(cluster, msg);
-            Request req=Request.newBuilder().setMessage(m).build();
-            client.send(req);
-        }
-        catch(Exception e) {
-            throw new RuntimeException(String.format("%s: failed sending message: %s", local_addr, e));
-        }
-        return null;
-    }
 
 
     protected org.jgroups.upgrade_server.Message jgroupsMessageToProtobufMessage(String cluster, Message jg_msg) throws Exception {
