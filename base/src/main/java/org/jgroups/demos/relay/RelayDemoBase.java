@@ -1,6 +1,5 @@
 package org.jgroups.demos.relay;
 
-import com.sun.xml.internal.rngom.parse.host.Base;
 import org.jgroups.Address;
 import org.jgroups.JChannel;
 import org.jgroups.Message;
