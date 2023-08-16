@@ -15,6 +15,7 @@
         <module>jgroups-36</module>
         <module>jgroups-4</module>
         <module>jgroups-5</module>
+        <module>jgroups-5.2</module>
     </modules>
 
     <properties>

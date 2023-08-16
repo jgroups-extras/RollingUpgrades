@@ -9,13 +9,13 @@
       <relativePath>../pom.xml</relativePath>
    </parent>
 
-   <artifactId>jgroups-5</artifactId>
+   <artifactId>jgroups-5.2</artifactId>
    <packaging>jar</packaging>
-   <name>JGroups 5.x UPGRADE protocol</name>
-   <description>JGroups 5.x UPGRADE protocol for Rolling Upgrades</description>
+   <name>JGroups 5.2.x UPGRADE protocol</name>
+   <description>JGroups 5.2.x UPGRADE protocol for Rolling Upgrades</description>
 
    <properties>
-      <version.jgroups>5.2.10.Final</version.jgroups>
+      <version.jgroups>5.2.18.Final</version.jgroups>
       <maven.compiler.source>11</maven.compiler.source>
       <maven.compiler.target>11</maven.compiler.target>
    </properties>
