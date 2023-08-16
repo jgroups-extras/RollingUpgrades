@@ -3,7 +3,6 @@ package org.jgroups.protocols.upgrade;
 import com.google.protobuf.ByteString;
 import org.jgroups.BytesMessage;
 import org.jgroups.Message;
-import org.jgroups.base.UpgradeBase;
 import org.jgroups.blocks.RequestCorrelator;
 import org.jgroups.common.ByteArray;
 import org.jgroups.protocols.relay.RELAY2;
@@ -15,7 +14,7 @@ import org.jgroups.util.Util;
  * @author Bela Ban
  * @since  1.0
  */
-public class UPGRADE extends UpgradeBase {
+public class UPGRADE extends UpgradeBase5 {
 
     public Object down(Message msg) { // cannot be moved to parent due to IncompatibleClassChangeError (class->interface)
         if(!active)
