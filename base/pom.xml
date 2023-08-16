@@ -23,7 +23,7 @@
         <dependency>
             <groupId>org.jgroups</groupId>
             <artifactId>jgroups</artifactId>
-            <version>4.2.18.Final-SNAPSHOT</version>
+            <version>4.2.18.Final</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
