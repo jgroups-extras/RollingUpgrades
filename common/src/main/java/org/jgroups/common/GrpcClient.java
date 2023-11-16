@@ -49,6 +49,7 @@ public class GrpcClient implements StreamObserver<Response> {
     public String     getServerCert()                           {return server_cert;}
     public GrpcClient setServerCert(String c)                   {server_cert=c; return this;}
     public boolean    isConnected()                             {return state.isState(ConnectionStatus.State.connected);}
+    public ConnectionStatus state()                             {return state;}
     public GrpcClient setReconnectionFunction(Runnable f)       {reconnect_function=f; return this;}
     public long       getReconnectInterval()                    {return reconnect_interval;}
     public GrpcClient setReconnectInterval(long i)              {reconnect_interval=i; return this;}
@@ -88,6 +89,17 @@ public class GrpcClient implements StreamObserver<Response> {
             }
             catch(InterruptedException e) {
             }
+        }
+        return this;
+    }
+
+    public synchronized GrpcClient registerView(String cluster, View local_view, Address local_addr) {
+        if(state.setState(disconnected, connecting)) {
+            send_stream=asyncStub.connect(this);
+            RegisterView register_req=RegisterView.newBuilder().setClusterName(cluster).setView(local_view)
+              .setLocalAddr(local_addr).build();
+            Request req=Request.newBuilder().setRegisterReq(register_req).build();
+            send_stream.onNext(req);
         }
         return this;
     }
@@ -137,6 +149,10 @@ public class GrpcClient implements StreamObserver<Response> {
         }
         if(rsp.hasView()) {
             handleView(rsp.getView());
+            return;
+        }
+        if(rsp.hasRegViewOk()) {
+            state.setState(connected);
             return;
         }
         throw new IllegalStateException(String.format("response is illegal: %s", rsp));

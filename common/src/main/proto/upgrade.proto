@@ -31,8 +31,20 @@ message JoinRequest {
 
 /** Used for graceful leaves. Ungraceful leaves (e.g. crashes) are detected by the UpgradeService directly  */
 message LeaveRequest {
-    string      cluster_name = 1;
-    Address     leaver       = 2;
+    string  cluster_name = 1;
+    Address leaver       = 2;
+}
+
+/** Sent by the coordinator on activate(). The UpgradeServer then adds the view into its map, overwriting any view
+ already present. When view is null, the entry matching cluster_name will be removed (on deactivate()) */
+message RegisterView {
+    string  cluster_name = 1;
+    View    view         = 2;
+    Address local_addr   = 3;
+}
+
+message RegisterViewOk {
+
 }
 
 message Address {
@@ -68,16 +80,18 @@ message SiteUUID {
 
 message Request {
     oneof one_of {
-        Message      message   = 1;
-        JoinRequest  join_req  = 2;
-        LeaveRequest leave_req = 3;
+        Message      message      = 1;
+        JoinRequest  join_req     = 2;
+        LeaveRequest leave_req    = 3;
+        RegisterView register_req = 4;
     }
 }
 
 message Response {
     oneof one_of {
-        Message     message  = 1;
-        View        view     = 2;
+        Message        message     = 1;
+        View           view        = 2;
+        RegisterViewOk reg_view_ok = 3;
     }
 }
 

@@ -30,6 +30,12 @@ public class UpgradeService extends UpgradeServiceGrpc.UpgradeServiceImplBase {
                     handleMessage(req.getMessage());
                     return;
                 }
+                if(req.hasRegisterReq()) {
+                    RegisterView rv=req.getRegisterReq();
+                    log.fine(String.format("handleRegisterView(%s: %s)", rv.getClusterName(), rv.getView()));
+                    handleRegisterView(rv, responseObserver);
+                    return;
+                }
                 if(req.hasJoinReq()) {
                     log.fine(String.format("handleJoinRequest(%s)", req.getJoinReq().getAddress().getName()));
                     handleJoinRequest(req.getJoinReq(), responseObserver);
@@ -115,6 +121,28 @@ public class UpgradeService extends UpgradeServiceGrpc.UpgradeServiceImplBase {
             finally {
                 lock.unlock();
             }
+        }
+    }
+
+    protected void handleRegisterView(RegisterView rv, StreamObserver<Response> responseObserver) {
+        final String        cluster=rv.getClusterName();
+        final List<Address> mbrs=rv.getView().getMemberList();
+        final Address       local_addr=rv.getLocalAddr();
+        SynchronizedMap     m=members.computeIfAbsent(cluster, k -> new SynchronizedMap(new LinkedHashMap<>()));
+        Map<Address,StreamObserver<Response>> map=m.getMap();
+        Lock lock=m.getLock();
+        lock.lock();
+        try {
+            for(Address addr: mbrs)
+                map.putIfAbsent(addr, null);
+            map.put(local_addr, responseObserver);
+            // send response:
+            RegisterViewOk ack=RegisterViewOk.newBuilder().build();
+            Response rsp=Response.newBuilder().setRegViewOk(ack).build();
+            responseObserver.onNext(rsp);
+        }
+        finally {
+            lock.unlock();
         }
     }
 

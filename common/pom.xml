@@ -14,18 +14,22 @@
    <name>JGroups Rolling Upgrade commons</name>
    <description>JGroups Rolling Upgrade commons</description>
 
+
    <dependencies>
       <dependency>
          <groupId>io.grpc</groupId>
          <artifactId>grpc-netty</artifactId>
+         <version>${grpc.version}</version>
       </dependency>
       <dependency>
          <groupId>io.grpc</groupId>
          <artifactId>grpc-protobuf</artifactId>
+         <version>${grpc.version}</version>
       </dependency>
       <dependency>
          <groupId>io.grpc</groupId>
          <artifactId>grpc-stub</artifactId>
+         <version>${grpc.version}</version>
       </dependency>
       <dependency>
          <groupId>javax.annotation</groupId>
@@ -34,6 +38,7 @@
       <dependency>
          <groupId>org.testng</groupId>
          <artifactId>testng</artifactId>
+         <version>${testng.version}</version>
          <scope>test</scope>
       </dependency>
    </dependencies>

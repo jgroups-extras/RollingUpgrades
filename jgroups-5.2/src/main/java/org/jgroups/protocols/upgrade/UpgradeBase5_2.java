@@ -10,6 +10,7 @@ import org.jgroups.annotations.ManagedAttribute;
 import org.jgroups.annotations.ManagedOperation;
 import org.jgroups.annotations.Property;
 import org.jgroups.blocks.RequestCorrelator;
+import org.jgroups.common.ConnectionStatus;
 import org.jgroups.common.GrpcClient;
 import org.jgroups.common.Marshaller;
 import org.jgroups.conf.ClassConfigurator;
@@ -93,17 +94,18 @@ public abstract class UpgradeBase5_2 extends Protocol {
         return (T)this;
     }
 
-
-    @ManagedAttribute(description="True if the connected to the gRPC server")
-    public boolean isConnected() {
-        return client.isConnected();
-    }
-
     @ManagedAttribute(description="True if the reconnector is running")
     public boolean isReconnecting() {
         return client.reconnectorRunning();
     }
 
+    @ManagedAttribute(description="state of the connection")
+    public ConnectionStatus state() {return client.state();}
+
+    @ManagedAttribute(description="Whether or not this member is the coordinator")
+    public boolean isCoordinator() {
+        return Objects.equals(local_addr, local_view.getCreator());
+    }
 
     public void init() throws Exception {
         super.init();
@@ -114,7 +116,6 @@ public abstract class UpgradeBase5_2 extends Protocol {
           .start();
     }
 
-
     public void stop() {
         client.stop();
     }
@@ -122,7 +123,7 @@ public abstract class UpgradeBase5_2 extends Protocol {
     @ManagedOperation(description="Enable forwarding and receiving of messages to/from the UpgradeServer")
     public synchronized void activate() {
         if(!active) {
-            connect();
+            registerView();
             active=true;
         }
     }
@@ -183,6 +184,12 @@ public abstract class UpgradeBase5_2 extends Protocol {
         return null;
     }
 
+    protected void registerView() {
+        org.jgroups.upgrade_server.View v=jgroupsViewToProtobufView(local_view);
+        org.jgroups.upgrade_server.Address local=jgroupsAddressToProtobufAddress(local_addr);
+        log.debug("%s: registering view %s", local_addr, local_view);
+        client.registerView(cluster, v, local);
+    }
 
     protected void connect() {
         org.jgroups.upgrade_server.Address addr=jgroupsAddressToProtobufAddress(local_addr);
@@ -399,6 +406,18 @@ public abstract class UpgradeBase5_2 extends Protocol {
         return retval;
     }
 
+    protected static org.jgroups.upgrade_server.View jgroupsViewToProtobufView(View v) {
+        ViewId view_id=jgroupsViewIdToProtobufViewId(v.getViewId());
+        List<org.jgroups.upgrade_server.Address> mbrs=new ArrayList<>(v.size());
+        for(Address a: v)
+            mbrs.add(jgroupsAddressToProtobufAddress(a));
+        return org.jgroups.upgrade_server.View.newBuilder().addAllMember(mbrs).setViewId(view_id).build();
+    }
+
+    protected static ViewId jgroupsViewIdToProtobufViewId(org.jgroups.ViewId view_id) {
+        org.jgroups.upgrade_server.Address coord=jgroupsAddressToProtobufAddress(view_id.getCreator());
+        return ViewId.newBuilder().setCreator(coord).setId(view_id.getId()).build();
+    }
 
     protected static org.jgroups.View protobufViewToJGroupsView(org.jgroups.upgrade_server.View v) {
         org.jgroups.upgrade_server.ViewId pbuf_vid=v.getViewId();

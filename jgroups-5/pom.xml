@@ -15,7 +15,7 @@
    <description>JGroups 5.x UPGRADE protocol for Rolling Upgrades</description>
 
    <properties>
-      <version.jgroups>5.2.10.Final</version.jgroups>
+      <jgroups.version>5.2.10.Final</jgroups.version>
       <maven.compiler.source>11</maven.compiler.source>
       <maven.compiler.target>11</maven.compiler.target>
    </properties>
@@ -37,9 +37,8 @@
       <dependency>
          <groupId>org.jgroups</groupId>
          <artifactId>jgroups</artifactId>
-         <version>${version.jgroups}</version>
+         <version>${jgroups.version}</version>
       </dependency>
-
 
       <dependency>
          <groupId>org.apache.logging.log4j</groupId>
@@ -51,7 +50,6 @@
          <artifactId>log4j-api</artifactId>
          <optional>true</optional>
       </dependency>
-
 
 
    </dependencies>
