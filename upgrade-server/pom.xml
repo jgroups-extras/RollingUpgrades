@@ -15,7 +15,7 @@
     <description>JGroups Upgrade Server for Rolling Upgrades</description>
 
     <properties>
-        <netty.tcnative.version>2.0.36.Final</netty.tcnative.version>
+        <netty.tcnative.version>2.0.62.Final</netty.tcnative.version>
         <module.skipComponentMetaDataProcessing>false</module.skipComponentMetaDataProcessing>
         <module.skipTestComponentMetaDataProcessing>false</module.skipTestComponentMetaDataProcessing>
     </properties>
