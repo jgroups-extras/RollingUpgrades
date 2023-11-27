@@ -13,8 +13,8 @@ import java.io.InputStream;
 public class UpgradeServer {
     protected Server server;
 
-    public void start(int port, String cert, String private_key) throws Exception {
-        ServerBuilder<?> srv_builder=ServerBuilder.forPort(port).addService(new UpgradeService());
+    public void start(int port, String cert, String private_key, boolean verbose) throws Exception {
+        ServerBuilder<?> srv_builder=ServerBuilder.forPort(port).addService(new UpgradeService().verbose(verbose));
         String encryption="plaintext - no encryption";
         if(cert != null || private_key != null) {
             if(cert == null || private_key == null)
@@ -33,13 +33,10 @@ public class UpgradeServer {
         server.awaitTermination();
     }
 
-    protected void blockUntilShutdown() throws InterruptedException {
-        server.awaitTermination();
-    }
-
     public static void main(String[] args) throws Exception {
         int port=50051;
         String cert=null, private_key=null;
+        boolean verbose=false;
         UpgradeServer srv=new UpgradeServer();
         for(int i=0; i < args.length; i++) {
             if(args[i].equals("-p") || args[i].equals("-port")) {
@@ -54,15 +51,19 @@ public class UpgradeServer {
                 private_key=args[++i];
                 continue;
             }
+            if(args[i].equals("-v")) {
+                verbose=true;
+                continue;
+            }
             help();
             return;
         }
-        srv.start(port, cert, private_key);
-        srv.blockUntilShutdown();
+        srv.start(port, cert, private_key, verbose);
     }
 
     protected static void help() {
-        System.out.println("UpgradeServer [-port <server port>] [-cert cert-file] [-key private-key-file]\n" +
+        System.out.println("UpgradeServer [-port <server port>] [-cert cert-file] [-v] " +
+                             "[-key private-key-file]\n" +
                              "(the certificate and public/private key can be generated with bin/genkey.sh)");
     }
 }

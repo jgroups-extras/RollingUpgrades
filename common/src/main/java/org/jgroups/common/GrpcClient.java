@@ -7,14 +7,13 @@ import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.stub.StreamObserver;
 import io.netty.handler.ssl.SslContext;
 import org.jgroups.upgrade_server.*;
+import org.jgroups.upgrade_server.UpgradeServiceGrpc.UpgradeServiceStub;
 
 import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
 
@@ -27,37 +26,40 @@ import static org.jgroups.common.ConnectionStatus.State.*;
  * @since  1.1.1
  */
 public class GrpcClient implements StreamObserver<Response> {
-    protected String                                server_address="localhost";
-    protected int                                   server_port=50051;
-    protected String                                server_cert;
-    protected ManagedChannel                        channel;
-    protected UpgradeServiceGrpc.UpgradeServiceStub asyncStub;
-    protected StreamObserver<Request>               send_stream;
-    protected final Lock                            send_stream_lock=new ReentrantLock();
-    protected final Set<Consumer<View>>             view_handlers=new HashSet<>();
-    protected final Set<Consumer<Message>>          message_handlers=new HashSet<>();
-    protected final ConnectionStatus                state=new ConnectionStatus();
-    protected long                                  reconnect_interval=3000; // in ms
-    protected Runner                                reconnector;
-    protected Runnable                              reconnect_function;
-    protected static final Logger                   log=Logger.getLogger(GrpcClient.class.getSimpleName());
+    protected String                       server_address="localhost";
+    protected int                          server_port=50051;
+    protected String                       server_cert;
+    protected ManagedChannel               channel;
+    protected UpgradeServiceStub           asyncStub;
+    // protected UpgradeServiceBlockingStub   syncStub; // we can have both a sync/async stub; they use the same channel
+    protected StreamObserver<Request>      send_stream;
+    protected final Set<Consumer<View>>    view_handlers=new HashSet<>();
+    protected final Set<Consumer<Message>> message_handlers=new HashSet<>();
+    protected Consumer<GetViewResponse>    view_rsp_handler;
+    protected final ConnectionStatus       state=new ConnectionStatus();
+    protected long                         reconnect_interval=3000; // in ms
+    protected Runner                       reconnector;
+    protected Runnable                     reconnect_function;
+    protected static final Logger          log=Logger.getLogger(GrpcClient.class.getSimpleName());
 
-    public String     getServerAddress()                        {return server_address;}
-    public GrpcClient setServerAddress(String a)                {server_address=a; return this;}
-    public int        getServerPort()                           {return server_port;}
-    public GrpcClient setServerPort(int p)                      {server_port=p; return this;}
-    public String     getServerCert()                           {return server_cert;}
-    public GrpcClient setServerCert(String c)                   {server_cert=c; return this;}
-    public boolean    isConnected()                             {return state.isState(ConnectionStatus.State.connected);}
-    public ConnectionStatus state()                             {return state;}
-    public GrpcClient setReconnectionFunction(Runnable f)       {reconnect_function=f; return this;}
-    public long       getReconnectInterval()                    {return reconnect_interval;}
-    public GrpcClient setReconnectInterval(long i)              {reconnect_interval=i; return this;}
-    public GrpcClient addViewHandler(Consumer<View> h)          {view_handlers.add(h); return this;}
-    public GrpcClient removeViewHandler(Consumer<View> h)       {view_handlers.remove(h); return this;}
-    public GrpcClient addMessageHandler(Consumer<Message> h)    {message_handlers.add(h); return this;}
-    public GrpcClient removeMessageHandler(Consumer<Message> h) {message_handlers.remove(h); return this;}
-    public boolean    reconnectorRunning()                      {return reconnector.isRunning();}
+    public String     getServerAddress()                                  {return server_address;}
+    public GrpcClient setServerAddress(String a)                          {server_address=a; return this;}
+    public int        getServerPort()                                     {return server_port;}
+    public GrpcClient setServerPort(int p)                                {server_port=p; return this;}
+    public String     getServerCert()                                     {return server_cert;}
+    public GrpcClient setServerCert(String c)                             {server_cert=c; return this;}
+    public boolean    isConnected()                                       {return state.isState(connected);}
+    public ConnectionStatus state()                                       {return state;}
+    public GrpcClient setReconnectionFunction(Runnable f)                 {reconnect_function=f; return this;}
+    public long       getReconnectInterval()                              {return reconnect_interval;}
+    public GrpcClient setReconnectInterval(long i)                        {reconnect_interval=i; return this;}
+    public GrpcClient addViewHandler(Consumer<View> h)                    {view_handlers.add(h); return this;}
+    public GrpcClient removeViewHandler(Consumer<View> h)                 {view_handlers.remove(h); return this;}
+    public GrpcClient addMessageHandler(Consumer<Message> h)              {message_handlers.add(h); return this;}
+    public GrpcClient removeMessageHandler(Consumer<Message> h)           {message_handlers.remove(h); return this;}
+    public GrpcClient setViewResponseHandler(Consumer<GetViewResponse> h) {this.view_rsp_handler=h; return this;}
+    public Consumer<GetViewResponse> getViewResponseHandler()             {return view_rsp_handler;}
+    public boolean    reconnectorRunning()                                {return reconnector.isRunning();}
 
 
 
@@ -76,6 +78,7 @@ public class GrpcClient implements StreamObserver<Response> {
         else
             channel=cb.sslContext(ctx).build();
         asyncStub=UpgradeServiceGrpc.newStub(channel);
+        // syncStub=UpgradeServiceGrpc.newBlockingStub(channel);
         if(reconnect_function != null)
             reconnector=createReconnector();
         return this;
@@ -104,6 +107,13 @@ public class GrpcClient implements StreamObserver<Response> {
         return this;
     }
 
+    public synchronized GrpcClient getViewFromServer(String cluster) {
+        GetViewRequest gv=GetViewRequest.newBuilder().setClusterName(cluster).build();
+        Request req=Request.newBuilder().setGetViewReq(gv).build();
+        send_stream.onNext(req);
+        return this;
+    }
+
     public synchronized GrpcClient connect(String cluster, Address local_addr) {
         if(state.setState(disconnected, connecting)) {
             send_stream=asyncStub.connect(this);
@@ -127,19 +137,11 @@ public class GrpcClient implements StreamObserver<Response> {
         return this;
     }
 
-    public GrpcClient send(Request req) {
+    public synchronized GrpcClient send(Request req) {
         if(state.isStateOneOf(disconnected, disconnecting))
             throw new IllegalStateException(String.format("not connected to %s:%d", server_address, server_port));
-
-        send_stream_lock.lock();
-        try {
-            // Per javadoc, StreamObserver is not thread-safe and calls onNext() must be handled by the application
-            send_stream.onNext(req);
-            return this;
-        }
-        finally {
-            send_stream_lock.unlock();
-        }
+        send_stream.onNext(req);
+        return this;
     }
 
     public void onNext(Response rsp) {
@@ -153,6 +155,11 @@ public class GrpcClient implements StreamObserver<Response> {
         }
         if(rsp.hasRegViewOk()) {
             state.setState(connected);
+            return;
+        }
+        if(rsp.hasGetViewRsp()) {
+            if(view_rsp_handler != null)
+                view_rsp_handler.accept(rsp.getGetViewRsp());
             return;
         }
         throw new IllegalStateException(String.format("response is illegal: %s", rsp));

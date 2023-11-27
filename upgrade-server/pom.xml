@@ -20,19 +20,28 @@
         <module.skipTestComponentMetaDataProcessing>false</module.skipTestComponentMetaDataProcessing>
     </properties>
     <dependencies>
-      
         <dependency>
             <groupId>org.jgroups.rolling-upgrades</groupId>
             <artifactId>jgroups-upgrade-commons</artifactId>
             <version>${project.version}</version>
         </dependency>
-
         <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-tcnative</artifactId>
             <version>${netty.tcnative.version}</version>
             <classifier>${os.detected.classifier}</classifier>
             <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>2.22.0</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+            <version>2.22.0</version>
         </dependency>
     </dependencies>
 

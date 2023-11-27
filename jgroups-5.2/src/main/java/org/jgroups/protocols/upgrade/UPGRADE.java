@@ -15,24 +15,6 @@ import org.jgroups.util.Util;
  */
 public class UPGRADE extends UpgradeBase5_2 {
 
-    public Object down(Message msg) { // cannot be moved to parent due to IncompatibleClassChangeError (class->interface)
-        if(!active)
-            return down_prot.down(msg);
-
-        // else send to UpgradeServer
-        if(msg.getSrc() == null)
-            msg.setSrc(local_addr);
-        try {
-            org.jgroups.upgrade_server.Message m=jgroupsMessageToProtobufMessage(cluster, msg);
-            Request req=Request.newBuilder().setMessage(m).build();
-            client.send(req);
-        }
-        catch(Exception e) {
-            throw new RuntimeException(String.format("%s: failed sending message: %s", local_addr, e));
-        }
-        return null;
-    }
-
 
     protected org.jgroups.upgrade_server.Message jgroupsMessageToProtobufMessage(String cluster, Message jg_msg) throws Exception {
         if(jg_msg == null)

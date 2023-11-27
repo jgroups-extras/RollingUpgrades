@@ -2,9 +2,9 @@ package org.jgroups.protocols.upgrade;
 
 import com.google.protobuf.ProtocolStringList;
 import org.jgroups.Address;
-import org.jgroups.Event;
 import org.jgroups.Message;
 import org.jgroups.View;
+import org.jgroups.*;
 import org.jgroups.annotations.MBean;
 import org.jgroups.annotations.ManagedAttribute;
 import org.jgroups.annotations.ManagedOperation;
@@ -14,16 +14,20 @@ import org.jgroups.common.ConnectionStatus;
 import org.jgroups.common.GrpcClient;
 import org.jgroups.common.Marshaller;
 import org.jgroups.conf.ClassConfigurator;
+import org.jgroups.protocols.pbcast.GMS;
 import org.jgroups.protocols.relay.RELAY2;
 import org.jgroups.protocols.relay.SiteMaster;
 import org.jgroups.protocols.relay.SiteUUID;
 import org.jgroups.stack.Protocol;
+import org.jgroups.upgrade_server.ViewId;
 import org.jgroups.upgrade_server.*;
 import org.jgroups.util.NameCache;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static org.jgroups.common.ConnectionStatus.State.connected;
+import static org.jgroups.common.ConnectionStatus.State.disconnecting;
 import static org.jgroups.protocols.relay.RelayHeader.*;
 
 
@@ -104,15 +108,15 @@ public abstract class UpgradeBase5_2 extends Protocol {
 
     @ManagedAttribute(description="Whether or not this member is the coordinator")
     public boolean isCoordinator() {
-        return Objects.equals(local_addr, local_view.getCreator());
+        return Objects.equals(local_addr, local_view != null? local_view.getCreator() : null);
     }
 
     public void init() throws Exception {
         super.init();
         client.setServerAddress(server_address).setServerPort(server_port).setServerCert(server_cert)
           .addViewHandler(this::handleView).addMessageHandler(this::handleMessage)
-          .setReconnectionFunction(this::connect)
-          .setReconnectInterval(reconnect_interval)
+          .setViewResponseHandler(this::handleViewResponse)
+          .setReconnectionFunction(this::connect).setReconnectInterval(reconnect_interval)
           .start();
     }
 
@@ -131,8 +135,9 @@ public abstract class UpgradeBase5_2 extends Protocol {
     @ManagedOperation(description="Disable forwarding and receiving of messages to/from the UpgradeServer")
     public synchronized void deactivate() {
         if(active) {
-            disconnect();
+            state().setState(connected, disconnecting);
             active=false;
+            getViewFromServer();
         }
     }
 
@@ -150,7 +155,8 @@ public abstract class UpgradeBase5_2 extends Protocol {
                 return ret;
             case Event.DISCONNECT:
                 ret=down_prot.down(evt);
-                disconnect();
+                if(active)
+                    disconnect();
                 return ret;
         }
         return down_prot.down(evt);
@@ -191,6 +197,11 @@ public abstract class UpgradeBase5_2 extends Protocol {
         client.registerView(cluster, v, local);
     }
 
+    protected void getViewFromServer() {
+        log.debug("%s: getting view for cluster %s", local_addr, cluster);
+        client.getViewFromServer(cluster);
+    }
+
     protected void connect() {
         org.jgroups.upgrade_server.Address addr=jgroupsAddressToProtobufAddress(local_addr);
         log.debug("%s: joining cluster %s", local_addr, cluster);
@@ -205,8 +216,12 @@ public abstract class UpgradeBase5_2 extends Protocol {
 
     protected void handleView(org.jgroups.upgrade_server.View view) {
         View jg_view=protobufViewToJGroupsView(view);
+        if(!active) {
+            log.warn("%s: global view %s from server is discarded as active == false", local_addr, jg_view);
+            return;
+        }
         global_view=jg_view;
-        log.debug("%s: received new global view %s", local_view, global_view);
+        log.debug("%s: received new global view %s", local_addr, global_view);
         up_prot.up(new Event(Event.VIEW_CHANGE, jg_view));
     }
 
@@ -218,6 +233,24 @@ public abstract class UpgradeBase5_2 extends Protocol {
         catch(Exception e) {
             log.error("%s: failed reading message: %s", local_addr, e);
         }
+    }
+
+    protected void handleViewResponse(org.jgroups.upgrade_server.GetViewResponse rsp) {
+        org.jgroups.upgrade_server.View v=rsp.getView();
+        View view=protobufViewToJGroupsView(v);
+
+        // Install a MergeView *if* I'm the coordinator of the global view
+        if(Objects.equals(local_addr, view.getCreator())) {
+            long view_id=Math.max(view.getViewId().getId(), local_view == null? 1 : local_view.getViewId().getId()) +1;
+            MergeView mv=new MergeView(view.getCreator(), view_id, view.getMembers(), List.of(view));
+            log.debug("%s: I'm the coordinator, installing new local view %s", local_addr, mv);
+            GMS gms=stack.findProtocol(GMS.class);
+            gms.castViewChangeAndSendJoinRsps(mv, null, mv.getMembers(), null, null);
+        }
+        else
+            log.debug("%s: I'm not coordinator, waiting for new MergeView from global view %s", local_addr, view);
+        // disconnect();
+        active=false;
     }
 
     protected static org.jgroups.upgrade_server.Message.Builder msgBuilder(String cluster, Address src, Address dest,

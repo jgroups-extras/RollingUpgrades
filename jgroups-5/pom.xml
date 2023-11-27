@@ -9,7 +9,7 @@
       <relativePath>../pom.xml</relativePath>
    </parent>
 
-   <artifactId>jgroups-5</artifactId>
+   <artifactId>jgroups5-upgrade</artifactId>
    <packaging>jar</packaging>
    <name>JGroups 5.x UPGRADE protocol</name>
    <description>JGroups 5.x UPGRADE protocol for Rolling Upgrades</description>
@@ -22,12 +22,6 @@
 
    <dependencies>
       
-      <dependency>
-         <groupId>org.jgroups.rolling-upgrades</groupId>
-         <artifactId>jgroups-upgrade-commons</artifactId>
-         <version>${project.version}</version>
-      </dependency>
-
       <dependency>
          <groupId>org.jgroups.rolling-upgrades</groupId>
          <artifactId>jgroups-upgrade-base</artifactId>

@@ -9,38 +9,40 @@
       <relativePath>../pom.xml</relativePath>
    </parent>
 
-   <artifactId>jgroups-5.2</artifactId>
+   <artifactId>jgroups52-upgrade</artifactId>
    <packaging>jar</packaging>
    <name>JGroups 5.2.x UPGRADE protocol</name>
    <description>JGroups 5.2.x UPGRADE protocol for Rolling Upgrades</description>
 
    <properties>
-      <jgroups.version>5.2.18.Final</jgroups.version>
+      <jgroups.version>5.2.20.Final-SNAPSHOT</jgroups.version>
       <maven.compiler.source>11</maven.compiler.source>
       <maven.compiler.target>11</maven.compiler.target>
    </properties>
 
    <dependencies>
-      
-      <dependency>
-         <groupId>org.jgroups.rolling-upgrades</groupId>
-         <artifactId>jgroups-upgrade-commons</artifactId>
-         <version>${project.version}</version>
-      </dependency>
-
-      <dependency>
-         <groupId>org.jgroups.rolling-upgrades</groupId>
-         <artifactId>jgroups-upgrade-base</artifactId>
-         <version>${project.version}</version>
-      </dependency>
 
       <dependency>
          <groupId>org.jgroups</groupId>
          <artifactId>jgroups</artifactId>
          <version>${jgroups.version}</version>
-         <scope>provided</scope>
+         <scope>compile</scope>
          <!--optional>true<optional-->
       </dependency>
+      
+      <dependency>
+         <groupId>org.jgroups.rolling-upgrades</groupId>
+         <artifactId>jgroups-upgrade-base</artifactId>
+         <version>${project.version}</version>
+         <exclusions>
+            <exclusion>
+               <groupId>org.jgroups</groupId>
+               <artifactId>jgroups</artifactId>
+            </exclusion>
+         </exclusions>
+      </dependency>
+
+
 
    </dependencies>
 
