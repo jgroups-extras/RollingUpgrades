@@ -132,6 +132,12 @@ public abstract class UpgradeBase5_2 extends Protocol {
         }
     }
 
+    @ManagedOperation(description="Activates only if cluster_name matches the local cluster")
+    public void activate(String cluster_name) {
+        if(cluster != null && Objects.equals(cluster, cluster_name))
+            activate();
+    }
+
     @ManagedOperation(description="Disable forwarding and receiving of messages to/from the UpgradeServer")
     public synchronized void deactivate() {
         if(active) {
@@ -141,6 +147,11 @@ public abstract class UpgradeBase5_2 extends Protocol {
         }
     }
 
+    @ManagedOperation(description="Deactivates only if cluster_name matches the local cluster")
+    public void deactivate(String cluster_name) {
+        if(cluster != null && Objects.equals(cluster, cluster_name))
+            deactivate();
+    }
 
     public Object down(Event evt) {
         switch(evt.type()) {
