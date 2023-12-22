@@ -1,5 +1,9 @@
 = Rolling upgrades of a JGroups cluster
 
+
+NOTE: This project is discontinued; it has been replaced by upgrade-jgroups (https://github.com/jgroups-extras/upgrade-jgroups) and
+upgrade-common (https://github.com/jgroups-extras/upgrade-common).
+
 This document describes how to upgrade a JGroups cluster to a new, incompatible version,
 or a new configuration. The term _incompatible_ means that the nodes running on the new version
 (or configuration) would be unable to form a cluster with the existing nodes.
